@@ -1,0 +1,7 @@
+# 忽略所有檔案
+*
+
+# 只保留以下檔案
+!.gitignore
+!README.md
+!pdf_to_excel.py
