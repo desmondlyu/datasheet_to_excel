@@ -1,0 +1,24 @@
+{
+  "name": "datasheet_to_excel",
+  "version": "1.0.0",
+  "description": "Browser-only PDF datasheet extraction, comparison and Excel export",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/browser/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/desmondlyu/datasheet_to_excel.git"
+  },
+  "type": "module",
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  },
+  "private": true
+}
