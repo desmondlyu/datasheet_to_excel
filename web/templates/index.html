@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Datasheet 規格工作台</title><link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script></head>
+<body>
+<header class="top"><a href="/" class="brand"><span class="chip" aria-hidden="true">▦</span><span>Datasheet <strong>規格工作台</strong></span></a><span class="local"><i></i>本機處理</span></header>
+<div class="workspace">
+<aside>
+<div class="intro"><h1>把規格書，<br>整理成可用的資料。</h1><p>保留產品、條件與原文依據。<br>從 PDF 到一列一筆的 Excel。</p></div>
+<form id="upload-form">
+<label class="step" for="new-file">新版規格書 <span>必要</span></label>
+<label class="drop" id="drop-zone" for="new-file"><span class="file-icon" aria-hidden="true">＋</span><strong id="new-label">選擇或拖入 PDF</strong><small>文字型 PDF，合計上限 50 MB</small><input id="new-file" name="new_pdf" type="file" accept=".pdf,application/pdf" required></label>
+<label class="check"><input type="checkbox" id="compare">比對新舊版本</label>
+<div id="old-area" hidden><label class="step" for="old-file">舊版規格書</label><input id="old-file" name="old_pdf" type="file" accept=".pdf,application/pdf"><label class="field-label" for="old-pages">舊版指定頁碼（選填）</label><input id="old-pages" name="old_pages" placeholder="例如 169,170,171"></div>
+<details class="options"><summary>頁碼設定</summary><label class="field-label" for="pages">新版指定頁碼（選填）</label><input id="pages" name="pages" placeholder="例如 169,170,171"><p>留白自動偵測電性規格章節。指定頁碼請使用 PDF 檔案的實際頁次，可能與頁尾印刷頁碼不同。</p></details>
+<button class="primary convert" id="convert" type="submit">解析並預覽</button>
+<p id="progress" role="status" aria-live="polite">上傳檔案只在解析期間暫存；結果保留 30 分鐘。</p>
+</form>
+<div class="rules"><strong>匯出規則</strong><p>一個產品 × 一項規格 × 一組條件</p><p>空白保留空白，不補 0。<br>單位、± 與 VCC 表達式完整保留。</p></div>
+</aside>
+<main>
+<div class="main-title"><div><h2>規格預覽</h2><p id="file-title">上傳規格書後，在這裡核對匯出結果。</p></div><div class="downloads"><button id="export-all" disabled>下載全部 Excel</button><button id="export-filtered" disabled class="primary">下載篩選結果</button></div></div>
+<div id="error" class="error" role="alert" hidden></div>
+<div class="metrics"><div><span>規格列數</span><strong id="row-count">—</strong></div><div><span>產品型號</span><strong id="product-count">—</strong></div><div><span>變更 / 新增 / 移除</span><strong id="change-count">—</strong></div><div><span>待核對表格</span><strong id="review-count">—</strong></div></div>
+<nav class="tabs" aria-label="結果檢視"><button class="active" data-tab="specs" aria-pressed="true">標準化規格</button><button data-tab="review" aria-pressed="false">待核對原表</button><button data-tab="source" aria-pressed="false">來源文字與註解</button></nav>
+<section id="specs-panel">
+<div class="filters"><label class="search"><span class="sr-only">搜尋規格</span><input id="search" type="search" placeholder="搜尋 symbol、parameter 或 condition…"></label><label><span class="sr-only">產品</span><select id="product"><option value="">全部產品</option></select></label><label><span class="sr-only">規格類型</span><select id="kind"><option value="">全部類型</option><option>DC</option><option>AC</option><option>Other</option></select></label><label><span class="sr-only">比對狀態</span><select id="status"><option value="">全部狀態</option><option value="changed">變更</option><option value="added">新增</option><option value="removed">移除</option><option value="review">待確認配對</option><option value="unchanged">未變更</option></select></label></div>
+<div id="empty" class="empty"><div class="sheet-illustration" aria-hidden="true"><div>PRODUCT　 MAX　 TYP　 MIN</div><span></span><span></span><span></span><span></span></div><h3>原本跨列的規格，攤平成清楚的每一列。</h3><p>讀取電流會依頻率分列；Chip Erase 會依產品分列。<br>先核對預覽，再匯出 Excel。</p></div>
+<div class="table-wrap" id="table-wrap" hidden><table id="spec-table"><thead></thead><tbody></tbody></table></div>
+<div class="table-footer"><span id="shown">尚無資料</span><div><button id="prev" disabled aria-label="上一頁">上一頁</button><span id="pagination"></span><button id="next" disabled aria-label="下一頁">下一頁</button></div></div>
+<p class="hint">點選規格列可查看完整條件及比對差異。移除項目僅列在 Excel 的 Changes 工作表。</p>
+</section>
+<section id="review-panel" hidden><div id="review-list" class="raw-list"><p>解析後，無法可靠標準化的原表會列在這裡。</p></div></section>
+<section id="source-panel" hidden><div id="source-list" class="raw-list"><p>解析後可查看來源頁面的原文及註解。</p></div></section>
+</main></div>
+<dialog id="detail"><div class="dialog-head"><h2>規格詳情</h2><button id="close-detail" aria-label="關閉詳情">×</button></div><div id="detail-content"></div></dialog>
+</body></html>
