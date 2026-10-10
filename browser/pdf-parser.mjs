@@ -1,6 +1,7 @@
 import {clean,productsFromText} from './spec-core.mjs';
 import {textItems,linesOfText,textIn,rulingLines,findCells,groupTables} from './geometry.mjs';
 import {normalizeTable,normalizeFrequency} from './normalize.mjs';
+import {getPageTextContent} from './pdf-text.mjs';
 
 export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
  if(data.byteLength>50*1024*1024)throw Error('每份 PDF 上限為 50 MB。');
@@ -14,7 +15,7 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
   const pageInfo=[];let inChapter=false,label='Electrical Characteristics';
   for(let n=1;n<=doc.numPages;n++){
    onProgress({stage:'text',current:n,total:doc.numPages});
-   const page=await doc.getPage(n),viewport=page.getViewport({scale:1}),items=textItems(await page.getTextContent(),viewport),lines=linesOfText(items),text=lines.map(l=>l.text).join('\n');
+   const page=await doc.getPage(n),viewport=page.getViewport({scale:1}),items=textItems(await getPageTextContent(page),viewport),lines=linesOfText(items),text=lines.map(l=>l.text).join('\n');
    const main=lines.find(l=>l.y<150&&/^\d+\s+[A-Z][A-Z /-]+$/.test(l.text)&&!l.text.includes('...'));
    if(main)inChapter=/ELECTRICAL CHARACTERISTICS/i.test(main.text);
    const heading=lines.filter(l=>l.y<160&&/^[1-9]\d*\.\d+\.?\s+[A-Z/]/.test(l.text)&&!l.text.includes('...'));

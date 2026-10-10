@@ -5,8 +5,11 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {parsePdf} from '../../browser/pdf-parser.mjs';
 import {compareRows} from '../../browser/spec-core.mjs';
 const path=process.env.SPEC_REFERENCE_PDF;
-test('private reference PDF: all products, DC/AC, matrix, notes and comparison', {skip:!path,timeout:120000},async()=>{
- const r=await parsePdf(pdfjs,await readFile(path));
+test('private reference PDF without stream async iteration: products, DC/AC, matrix, notes and comparison', {skip:!path,timeout:120000},async()=>{
+ const original=Object.getOwnPropertyDescriptor(ReadableStream.prototype,Symbol.asyncIterator);
+ delete ReadableStream.prototype[Symbol.asyncIterator];
+ let r;try{r=await parsePdf(pdfjs,await readFile(path));}
+ finally{if(original)Object.defineProperty(ReadableStream.prototype,Symbol.asyncIterator,original);}
  const find=(symbol,product='W25Q32RW',page)=>r.rows.filter(x=>x.symbol===symbol&&x['產品名稱']===product&&(page===undefined||x.page===page));
  assert.equal(r.products.length,7);
  for(const p of r.products)assert.equal(r.rows.filter(x=>x['產品名稱']===p&&x['spec type']==='DC').length,20,p);
