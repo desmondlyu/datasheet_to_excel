@@ -3,3 +3,4 @@
 .session-actions{display:flex;gap:8px;margin-top:10px}.session-actions button{font-size:12px;padding:8px} [hidden]{display:none!important}
 
 #build-version{font-size:10px;opacity:.8}.error-detail{margin:8px 0;color:#943748}.error-detail summary{cursor:pointer}.error-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#fff5f6;padding:12px;font:12px/1.6 monospace;user-select:text}
+.site-footer{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 18px;padding:20px 24px;border-top:1px solid var(--line);background:#f7f9fb;color:var(--muted);font-size:12px;line-height:1.6}.site-footer a{color:var(--accent);text-underline-offset:3px}.site-footer a:focus-visible{outline:3px solid #8bcbd4;outline-offset:3px}
