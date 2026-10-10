@@ -27,3 +27,12 @@ Independent review in the preceding session found three issues, all fixed and re
 ## Deployment
 
 The workflow builds PRs and deploys only master. Repository Pages source must be set to GitHub Actions by an administrator. Successful local validation does not mean the public site is live.
+
+## Compatibility fix, 2026-10-10
+
+A missing Array.findLast failed in application text grouping; missing Array.at also failed inside the pinned PDF.js worker during full-browser emulation. Replaced application calls with basic indexing/reverse iteration. Added narrowly imported core-js array compatibility modules and loaded PDF.js's WorkerMessageHandler in the application worker, so the parser uses the same compatibility support without spawning an additional worker.
+
+- Full reference suite after the fix: 16 passed, no skips or failures.
+- Production Vite build passed.
+- Production browser test disabled Array.findLast and Array.at before the application worker imported its modules. It parsed 1,442 rows, downloaded Excel, and compared identical PDFs with zero changed/added/removed rows. No page errors.
+- Independent review found no blocker. This is feature-removal emulation in Chromium, not an assertion that every Safari version was tested.

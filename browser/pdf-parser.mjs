@@ -18,7 +18,7 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
    const main=lines.find(l=>l.y<150&&/^\d+\s+[A-Z][A-Z /-]+$/.test(l.text)&&!l.text.includes('...'));
    if(main)inChapter=/ELECTRICAL CHARACTERISTICS/i.test(main.text);
    const heading=lines.filter(l=>l.y<160&&/^[1-9]\d*\.\d+\.?\s+[A-Z/]/.test(l.text)&&!l.text.includes('...'));
-   if(heading.length)label=heading.at(-1).text.replace(/^[\d.]+\s+/,'');
+   if(heading.length)label=heading[heading.length-1].text.replace(/^[\d.]+\s+/,'');
    const footer=lines.find(l=>l.y>viewport.height-90&&/^-\s*\d+\s*-/.test(l.text));
    pageInfo.push({n,page,viewport,items,lines,text,label,inChapter,printed:footer?Number(footer.text.match(/^-\s*(\d+)/)[1]):n});
   }
