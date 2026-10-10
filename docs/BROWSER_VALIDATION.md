@@ -44,3 +44,11 @@ The live site served the updated `index-DAtIXjSG.js` bundle, so deployment of th
 Release `2026-10-10.2` adds diagnostics only: a visible release identifier and an expandable, local report preserving the worker exception stack, last page/table progress, worker build, and browser user agent. It does not claim to fix the unlocated error. No PDF data or report is sent to a server.
 
 Validation: 18 Node tests passed with the private reference fixture; production build passed. A Chromium UI fault-injection check verified stack/page/build/browser details, disabled export after failure, and clearing the report on reset. The production build also passed reference parsing, Excel download, and identical-file comparison in WebKit and Chromium with Array.at/findLast disabled. The private fixture and extracted contents remain outside git.
+
+## iPhone text-stream failure fixed — release 2026-10-10.3
+
+The user's release .2 report identifies iPhone Chrome, text page 1/207, and PDF.js `getTextContent` at production worker line 46, column 102487. That position is the `for await` loop over its ReadableStream. Removing `ReadableStream.prototype[Symbol.asyncIterator]` from the application worker reproduces the same failure location in Chromium (`t is not async iterable`).
+
+Replaced that convenience-method call with a small adapter over PDF.js's public `streamTextContent().getReader().read()` API. It preserves item order, styles, first non-null language, default normalization options, and the original XFA text path; it releases the reader lock in finally. No dependency upgrade or global stream patch is required.
+
+Validation: 21 Node tests passed with the private reference PDF; production build passed. The reference regression now removes stream async iteration before parsing. Chromium and Playwright WebKit 27.2 both passed the production build with stream async iteration removed in the worker: 1,442 rows, successful Excel download, and zero changes comparing identical files. Independent review found no blocker. The user's physical iPhone was not directly tested.
