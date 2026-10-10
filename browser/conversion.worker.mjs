@@ -1,8 +1,10 @@
+import './array-compat.mjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+import {WorkerMessageHandler} from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import {parsePdf} from './pdf-parser.mjs';
 import {COLUMNS,compareRows} from './spec-core.mjs';
-pdfjs.GlobalWorkerOptions.workerSrc=workerUrl;
+// Run PDF.js inside this application worker, with the same compatibility shims.
+globalThis.pdfjsWorker={WorkerMessageHandler};
 self.onmessage=async({data})=>{try{
  const progress=label=>p=>self.postMessage({type:'progress',label,...p});
  const result=await parsePdf(pdfjs,data.newData,{pages:data.pages,onProgress:progress('新版')});
