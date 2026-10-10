@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Datasheet 規格工作台</title><link rel="stylesheet" href="./browser/style.css"><script type="module" src="./browser/main.mjs"></script></head>
 <body>
-<header class="top"><a href="./" class="brand"><span class="chip" aria-hidden="true">▦</span><span>Datasheet <strong>規格工作台</strong></span></a><span class="local"><i></i>瀏覽器內處理</span></header>
+<header class="top"><a href="./" class="brand"><span class="chip" aria-hidden="true">▦</span><span>Datasheet <strong>規格工作台</strong></span></a><span class="local"><i></i>瀏覽器內處理 <span id="build-version"></span></span></header>
 <div class="workspace">
 <aside>
 <div class="intro"><h1>把規格書，<br>整理成可用的資料。</h1><p>保留產品、條件與原文依據。<br>從 PDF 到一列一筆的 Excel。</p></div>
@@ -20,6 +20,7 @@
 <main>
 <div class="main-title"><div><h2>規格預覽</h2><p id="file-title">選擇規格書後，在這裡核對匯出結果。</p></div><div class="downloads"><button id="export-all" disabled>下載全部 Excel</button><button id="export-filtered" disabled class="primary">下載篩選結果</button></div></div>
 <div id="error" class="error" role="alert" hidden></div>
+<details id="error-detail" class="error-detail" hidden><summary>錯誤詳細資訊（可複製回報）</summary><pre id="error-report"></pre></details>
 <div class="metrics"><div><span>規格列數</span><strong id="row-count">—</strong></div><div><span>產品型號</span><strong id="product-count">—</strong></div><div><span>變更 / 新增 / 移除</span><strong id="change-count">—</strong></div><div><span>待核對表格</span><strong id="review-count">—</strong></div></div>
 <nav class="tabs" aria-label="結果檢視"><button class="active" data-tab="specs" aria-pressed="true">標準化規格</button><button data-tab="review" aria-pressed="false">待核對原表</button><button data-tab="source" aria-pressed="false">來源文字與註解</button></nav>
 <section id="specs-panel">
