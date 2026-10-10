@@ -36,3 +36,11 @@ A missing Array.findLast failed in application text grouping; missing Array.at a
 - Production Vite build passed.
 - Production browser test disabled Array.findLast and Array.at before the application worker imported its modules. It parsed 1,442 rows, downloaded Excel, and compared identical PDFs with zero changed/added/removed rows. No page errors.
 - Independent review found no blocker. This is feature-removal emulation in Chromium, not an assertion that every Safari version was tested.
+
+## Persistent client error investigation — 2026-10-10
+
+The live site served the updated `index-DAtIXjSG.js` bundle, so deployment of the previous compatibility change was verified. The user's continuing `undefined is not a function` error was not reproduced with the supplied private reference PDF in either Chromium or Playwright WebKit 27.2: both parsed 1,442 rows, downloaded Excel, and compared the identical files with zero changes. This does not prove compatibility with the user's exact browser/device/version.
+
+Release `2026-10-10.2` adds diagnostics only: a visible release identifier and an expandable, local report preserving the worker exception stack, last page/table progress, worker build, and browser user agent. It does not claim to fix the unlocated error. No PDF data or report is sent to a server.
+
+Validation: 18 Node tests passed with the private reference fixture; production build passed. A Chromium UI fault-injection check verified stack/page/build/browser details, disabled export after failure, and clearing the report on reset. The production build also passed reference parsing, Excel download, and identical-file comparison in WebKit and Chromium with Array.at/findLast disabled. The private fixture and extracted contents remain outside git.
