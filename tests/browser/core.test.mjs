@@ -13,3 +13,19 @@ test('ambiguous pairing preserves all old candidates',()=>{
  const r=compareRows([newer],[{...newer,max:10},{...newer,max:20}]);
  assert.equal(r[0]._status,'review');assert.deepEqual(r[0]._candidates.map(x=>x.max),[10,20]);
 });
+test('product detection accepts other families and multiple shorthand groups',()=>{
+ assert.deepEqual(productsFromText('W35T51NW'),['W35T51NW']);
+ assert.deepEqual(productsFromText('W35T51/01NW W25Q32/64RW-DTR'),['W35T51NW','W35T01NW','W25Q32RW','W25Q64RW']);
+ assert.deepEqual(productsFromText('MX25L12835F / MT25QL128ABA'),['MX25L12835F','MT25QL128ABA']);
+});
+test('product ranges use document order instead of a fixed family list',()=>{
+ const catalog=['W35T32NW','W35T64NW','W35T51NW'];
+ assert.deepEqual(productsFromText('W35T32NW–W35T51NW',catalog),catalog);
+ assert.deepEqual(productsFromText('W35T64NW',catalog),['W35T64NW']);
+});
+test('ranges exclude unrelated families from an interleaved document catalogue',()=>{
+ assert.deepEqual(productsFromText('W35T32NW–W35T51NW',['W35T32NW','W25Q32RW','W35T64NW','W25Q64RW','W35T51NW']),['W35T32NW','W35T64NW','W35T51NW']);
+});
+test('a range preserves additional explicitly named products',()=>{
+ assert.deepEqual(productsFromText('W35T32NW–W35T64NW W35T51NW',['W35T32NW','W35T64NW','W35T51NW']),['W35T32NW','W35T64NW','W35T51NW']);
+});

@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import {parsePdf} from '../../browser/pdf-parser.mjs';
+const path=process.env.SPEC_SECOND_REFERENCE_PDF;
+test('unnumbered W35T chapters retain products, temperature conditions and electrical tables',{skip:!path,timeout:120000},async()=>{
+ const r=await parsePdf(pdfjs,await readFile(path));
+ assert.deepEqual(r.products,['W35T51NW']);
+ const dc=r.rows.filter(r=>r['spec type']==='DC'&&r.page===160);
+ assert.equal(dc.length,19);
+ assert.deepEqual(dc.filter(r=>r.symbol==='ICC1').map(r=>r.max),[300,500]);
+ assert.deepEqual(dc.filter(r=>r.symbol==='ICC2').map(r=>r.max),[80,125]);
+ assert.ok(dc.find(r=>r.symbol==='ICC1'&&r.max===300).condition.includes('105'));
+ assert.ok(r.rows.some(r=>r['spec type']==='AC'&&r.page===162));
+ assert.ok(r.rows.some(r=>r['spec type']==='AC'&&r.page===164));
+ assert.ok(r.rows.filter(r=>r.page===163).every(r=>r.condition.includes('105°C')));
+ assert.ok(r.rows.filter(r=>r.page===165).every(r=>r.condition.includes('125°C')));
+ assert.ok(!r.sources.some(s=>/PACKAGE|ORDERING|REVISION HISTORY/i.test(s.section)));
+});
