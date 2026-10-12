@@ -2,8 +2,8 @@ import {COLUMNS,clean,makeRow,productsFromText} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 export function normalizeTable(table,items,defaults,meta){
  const cache=new Map();const text=c=>{const key=c.join(',');if(!cache.has(key))cache.set(key,textIn(items,c));return cache.get(key);};
- const headers={};const mapping={description:'parameter',parameter:'parameter',parameters:'parameter',symbol:'symbol',conditions:'condition',condition:'condition',min:'min',typ:'typ',max:'max',unit:'unit'};
- for(const cell of [...table.cells].sort((a,b)=>a[1]-b[1]||a[0]-b[0])){if(cell[1]>table.bbox[1]+60)continue;const key=mapping[clean(text(cell)).toLowerCase()];if(key&&!headers[key])headers[key]=cell;}
+ const headers={};const mapping={description:'parameter',parameter:'parameter',parameters:'parameter',symbol:'symbol',conditions:'condition',condition:'condition',min:'min',typ:'typ',max:'max',unit:'unit','test condition':'condition','test conditions':'condition',mode:'mode',alt:'alternate',product:'product',products:'product',device:'product','part number':'product'};
+ for(const cell of [...table.cells].sort((a,b)=>a[1]-b[1]||a[0]-b[0])){if(cell[1]>table.bbox[1]+60)continue;const key=mapping[clean(text(cell)).toLowerCase()];if(key&&headers[key]&&Math.abs(headers[key][0]-cell[0])>2&&['min','typ','max'].includes(key))return {rows:[],unparsed:[[textIn(items,table.bbox),'多組限制值欄位，無法可靠判定產品歸屬，請核對原表。']]};if(key&&!headers[key])headers[key]=cell;}
  if(!headers.parameter||!headers.symbol||!['min','typ','max'].some(k=>headers[k]))return {rows:[],unparsed:[]};
  const keys=Object.keys(headers).sort((a,b)=>headers[a][0]-headers[b][0]);const bounds=Object.fromEntries(keys.map((k,i)=>[k,[headers[k][0],i+1<keys.length?headers[keys[i+1]][0]:table.bbox[2]]]));
  const top=Math.max(...Object.values(headers).map(c=>c[3]));const [sx0,sx1]=bounds.symbol;
@@ -20,8 +20,13 @@ export function normalizeTable(table,items,defaults,meta){
    if(!['min','typ','max'].some(k=>v[k])&&bounds.min&&bounds.max){
     const r=textIn(items,[bounds.min[0],lo,bounds.max[1],hi]).split(/\s+to\s+/);if(r.length===2){v.min=r[0];v.max=r[1];}
    }
-   if(!['min','typ','max'].some(k=>v[k])){const band=textIn(items,[(bounds.condition||[sx1])[0],lo,table.bbox[2],hi]);active=productsFromText(band,active);continue;}
-   for(const product of productsFromText(v.condition||'',active)){rows.push(makeRow(product,v,meta));emitted++;}
+   if(!['min','typ','max'].some(k=>v[k])){const band=textIn(items,[(bounds.condition||[sx1])[0],lo,table.bbox[2],hi]);if(productsFromText(band).some(p=>defaults.includes(p)))active=productsFromText(band,defaults,true);continue;}
+   if(v.product&&(!productsFromText(v.product).length||productsFromText(v.product).some(p=>!defaults.includes(p)))&&!/^(all|all products|all devices)$/i.test(v.product)){unparsed.push([param,v.symbol,v.product,'無法可靠判定產品歸屬。']);continue;}
+   v.condition=[v.condition,v.mode].filter(Boolean).join('; ');
+   const qualifier=[v.product||'',v.condition||''].join(' ');
+   v.products=productsFromText(qualifier).some(p=>defaults.includes(p))?productsFromText(qualifier,defaults,true):active;
+   if(!v.products.length){unparsed.push([param,v.symbol,qualifier,'產品範圍無法依文件清單解析。']);continue;}
+   for(const product of v.products){rows.push(makeRow(product,v,meta));emitted++;}
   }
   if(!emitted)unparsed.push([param,text(anchor),'未辨識到限制值或限制值跨欄，請核對原文。']);
  }

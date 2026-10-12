@@ -63,7 +63,9 @@ Excel 包含：
 - PDF 合計上限 50 MB，每份上限 600 頁。只支援可擷取文字的 PDF，不含 OCR；加密 PDF 需先解除保護。
 - 檔案與結果只存在瀏覽器記憶體；可取消解析、清除檔案與結果。重新整理或關閉頁面後不保留。
 - PDF 在 Web Worker 解析，避免鎖住主要介面。Excel 產生時大型結果仍可能短暫占用主執行緒。
-- 產品辨識與表格重建以 Winbond W25Q 系列為主。已針對提供的 W25Q32/64/12/25/51/01/02RW reference PDF 驗證 1,442 列；不保證任意廠商或版型都能完整解析。
+- 產品從文件頁首／前兩頁辨識，不依檔名或固定型號清單。支援完整型號、斜線縮寫（如 W35T51/01NW）及依文件產品順序展開的型號範圍；共用規格依產品分列，Product／條件欄指定產品時只歸屬指定產品。
+- 支援有編號與無編號的電性章節，並以 Parameter／Symbol／Min／Typ／Max 表頭作為備援。保留 MODE、ALT 與 AC 標題中的 Operating Temperature（含續頁）。
+- 已用 W25Q32/64/12/25/51/01/02RW（1,442 列）及 W35T51NW 文件回歸驗證。仍不保證任意廠商或版型完整解析；無法辨識的產品限定、橫向並排多組限制值欄位會保留在 Review，避免錯配。
 - Review 與 Source 保留未轉換內容和原文，請在使用規格前核對。PDF.js 版本固定，升級後應重跑 reference 驗證。
 - 比對遇到重複鍵時，舊版候選值會保留在詳情與 Changes，供人工核對。
 - PDF 文字匯出為 Excel 文字，空白不補零。repo 不包含使用者 PDF 或匯出結果。
@@ -73,7 +75,7 @@ Excel 包含：
 
 ```sh
 npm test
-SPEC_REFERENCE_PDF=/absolute/path/reference.pdf npm test
+SPEC_REFERENCE_PDF=/absolute/path/reference.pdf SPEC_SECOND_REFERENCE_PDF=/absolute/path/second-reference.pdf npm test
 ```
 
 第一個指令略過未提供私有 PDF 的整合測試。PowerShell 設定環境變數可用 `$env:SPEC_REFERENCE_PDF = "C:\path\reference.pdf"` 後執行 `npm test`。

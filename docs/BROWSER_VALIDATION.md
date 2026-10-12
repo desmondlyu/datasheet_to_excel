@@ -52,3 +52,13 @@ The user's release .2 report identifies iPhone Chrome, text page 1/207, and PDF.
 Replaced that convenience-method call with a small adapter over PDF.js's public `streamTextContent().getReader().read()` API. It preserves item order, styles, first non-null language, default normalization options, and the original XFA text path; it releases the reader lock in finally. No dependency upgrade or global stream patch is required.
 
 Validation: 21 Node tests passed with the private reference PDF; production build passed. The reference regression now removes stream async iteration before parsing. Chromium and Playwright WebKit 27.2 both passed the production build with stream async iteration removed in the worker: 1,442 rows, successful Excel download, and zero changes comparing identical files. Independent review found no blocker. The user's physical iPhone was not directly tested.
+
+## 2026-10-12 — Multi-product and unnumbered chapters
+
+- Removed the fixed W25Q product list; tested full model names, multiple slash groups, same-family ranges within the document catalogue, and product-specific limits.
+- Added guards against treating standards in conditions as products, unknown product qualifiers/ranges, and ambiguous side-by-side limit groups. Unsupported groups remain in Review with source text.
+- W35T51NW: 121 normalized rows, including 19 DC rows on printed page 160. SDR/DDR modes, alternate symbols and operating-temperature headings (including continuation pages) are retained.
+- Existing seven-product W25Q reference: 1,442 rows, with 20 DC rows for each product and unchanged self-comparison.
+- 32 Node tests passed with both private PDFs supplied through environment variables. Private PDFs are not committed; CI skips those three private-document integration tests.
+- Production build tested in headless Chromium: both PDF uploads completed and both Excel downloads succeeded, with no page errors. No UI design changes.
+- Known limits: geometric table extraction is not universal; 3 W35T tables remain in Review. No new Safari engine run in this change. PDF.js emits existing font-program warnings in Node; parsing completes. Vite emits the existing large-bundle advisory.

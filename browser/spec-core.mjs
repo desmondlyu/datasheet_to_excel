@@ -1,23 +1,42 @@
 export const COLUMNS=['產品名稱','max','typ','min','symbol','parameter','condition','description','unit','spec type','page'];
-export const FAMILY=['32','64','12','25','51','01','02'].map(x=>'W25Q'+x+'RW');
 export const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
 export function numericValue(v){const s=clean(v).replace(/^([+−–-])\s+(?=\d)/,'$1');return /^[+−–-]?\d[\d,]*(?:\.\d+)?$/.test(s)?Number(s.replace(/,/g,'').replace(/[−–]/g,'-')):s;}
 export function parsePageInput(s){if(!s?.trim())return [];const p=s.split(',').map(x=>x.trim());if(p.some(x=>!/^\d+$/.test(x)||+x<1))throw Error('頁碼請使用正整數，以逗號分隔，例如 169,170,171。');return [...new Set(p.map(Number))];}
-export function productsFromText(text,fallback=[]){
- const family=text.match(/W25Q((?:\d{2}\/)+\d{2})([A-Z]{2})(?:-DTR)?/i);
- if(family)return family[1].split('/').map(n=>'W25Q'+n+family[2].toUpperCase());
- const range=text.match(/W25Q(32|64|12|25|51|01|02)RW\s*[-–]\s*(?:W25Q)?(32|64|12|25|51|01|02)RW/i);
- if(range)return FAMILY.slice(FAMILY.indexOf('W25Q'+range[1]+'RW'),FAMILY.indexOf('W25Q'+range[2]+'RW')+1);
- const ps=[...text.matchAll(/W25Q\d{2,4}[A-Z]{2}(?:-DTR)?/gi)].map(m=>m[0].toUpperCase().replace(/-DTR$/,''));
- return ps.length?[...new Set(ps)]:fallback;
+// Model names are evidence from the document, not a built-in product catalogue.
+export function productsFromText(text,fallback=[],knownOnly=false){
+ const expanded=String(text).toUpperCase().replace(/\b([A-Z]+[A-Z0-9]*[A-Z])(\d+(?:\s*\/\s*\d+)+)([A-Z][A-Z0-9]*)(?:-DTR)?\b/g,
+  (_,prefix,numbers,suffix)=>numbers.split(/\s*\/\s*/).map(n=>prefix+n+suffix).join(' '));
+ const family=p=>{const m=p.match(/^(.*?[A-Z])\d+([A-Z]+)$/);return m?m[1]+'|'+m[2]:p;};
+ let unresolved=false;
+ const ranged=expanded.replace(/\b([A-Z]+\d[A-Z0-9]*)\s*[-–—]\s*([A-Z]+\d[A-Z0-9]*|\d+[A-Z]+)\b/g,(_,first,endToken)=>{
+  const prefix=first.match(/^(.*?[A-Z])(\d+[A-Z]+)$/)?.[1];
+  const last=/^\d/.test(endToken)&&prefix?prefix+endToken:endToken;
+  const start=fallback.indexOf(first),end=fallback.indexOf(last);
+  if(start>=0&&end>=start&&family(first)===family(last))return fallback.slice(start,end+1).filter(p=>family(p)===family(first)).join(' ');
+  if(knownOnly)unresolved=true;
+  return first+' '+last;
+ });
+ if(unresolved)return [];
+ const tokens=[...ranged.matchAll(/\b[A-Z]+\d[A-Z0-9]*(?:-[A-Z][A-Z0-9]*)?\b/g)]
+  .map(m=>m[0].replace(/-DTR$/,''))
+  .filter(s=>s.length>=6&&(s.match(/\d/g)||[]).length>=2&&/[A-Z]/.test(s.slice(s.search(/\d/)+1)));
+ const products=[...new Set(tokens)].filter(p=>!knownOnly||fallback.includes(p));
+ return products.length?products:fallback;
 }
-export function stripProducts(text){return clean(text.replace(/W25Q\w+(?:\s*[-–]\s*(?:W25Q)?\w+RW)?/g,'')).replace(/^[,; ]+|[,; ]+$/g,'');}
+export function stripProducts(text,products=[]){
+ let result=String(text);
+ for(const p of products){const escaped=p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');result=result.replace(new RegExp('\\b'+escaped+'(?:-DTR)?\\b','gi'),'');}
+ return clean(result).replace(/^[,; /–—-]+|[,; /–—-]+$/g,'');
+}
 export function makeRow(product,v,meta){
  const r=Object.fromEntries(COLUMNS.map(c=>[c,'']));let desc=[];
  let symbol=clean(v.symbol).replace(/\((\d+)\)/g,(_,n)=>{desc.push('Note '+n);return '';}).replace(/\s+/g,'').trim();
- Object.assign(r,{'產品名稱':product,symbol,parameter:clean(v.parameter),condition:stripProducts(v.condition||''),unit:clean(v.unit),'spec type':meta.kind,page:meta.page,_pdf_page:meta.pdfPage,_section:meta.section,_table:meta.table,_status:'uncompared',_notes:meta.notes||''});
+ Object.assign(r,{'產品名稱':product,symbol,parameter:clean(v.parameter),condition:stripProducts(v.condition||'',v.products||[]),unit:clean(v.unit),'spec type':meta.kind,page:meta.page,_pdf_page:meta.pdfPage,_section:meta.section,_table:meta.table,_status:'uncompared',_notes:meta.notes||''});
  for(const k of ['max','typ','min'])r[k]=numericValue(clean(v[k]).replace(/\((\d+)\)/g,(_,n)=>{desc.push(k+': Note '+n);return '';}));
  if(/Factory Mode/i.test(meta.section))r.condition=[r.condition,'Factory Mode'].filter(Boolean).join('; ');
+ const temperature=meta.section.match(/Operating Temperature[^|)]*/i)?.[0];
+ if(temperature)r.condition=[r.condition,temperature.trim()].filter(Boolean).join('; ');
+ if(v.alternate)desc.push('Alternate symbol: '+clean(v.alternate));
  r.description=desc.join('; ');return r;
 }
 const identity=r=>JSON.stringify(['產品名稱','spec type','symbol','parameter','condition'].map(k=>clean(r[k]).toLowerCase()));

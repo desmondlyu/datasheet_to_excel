@@ -16,28 +16,43 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
   for(let n=1;n<=doc.numPages;n++){
    onProgress({stage:'text',current:n,total:doc.numPages});
    const page=await doc.getPage(n),viewport=page.getViewport({scale:1}),items=textItems(await getPageTextContent(page),viewport),lines=linesOfText(items),text=lines.map(l=>l.text).join('\n');
-   const main=lines.find(l=>l.y<150&&/^\d+\s+[A-Z][A-Z /-]+$/.test(l.text)&&!l.text.includes('...'));
-   if(main)inChapter=/ELECTRICAL CHARACTERISTICS/i.test(main.text);
-   const heading=lines.filter(l=>l.y<160&&/^[1-9]\d*\.\d+\.?\s+[A-Z/]/.test(l.text)&&!l.text.includes('...'));
-   if(heading.length)label=heading[heading.length-1].text.replace(/^[\d.]+\s+/,'');
+   const topLines=lines.filter(l=>l.y<180&&!/\.{3}|…/.test(l.text));
+   const title=l=>l.text.replace(/^\d+(?:\.\d+)*\.?\s+/,'');
+   const electrical=/^(?:(?:DC|AC|D\.C\.|A\.C\.)\s+)?Electrical Characteristics\b/i;
+   const section=/^(?:(?:DC|AC|D\.C\.|A\.C\.)\s+(?:Electrical Characteristics|Measurement Conditions)|IO Capacitance|Absolute Maximum Ratings|Operating Ranges|Recommended Operating|Power[- ]up|Program.*(?:Erase|Timing)|Erase.*Timing|Serial.*Frequency)/i;
+   const end=/^(?:PACKAGE|PACKAGING|ORDERING|REVISION HISTORY|REVISION TABLE|IMPORTANT NOTICE)\b/i;
+   for(const l of topLines){
+    const t=title(l);
+    if(end.test(t)){inChapter=false;label=t;break;}
+    if(electrical.test(t)){inChapter=true;if(!/cont[’']?d|continued/i.test(t)||!electrical.test(label))label=t;}
+    else if(section.test(t)){label=t;}
+    else if(/^\d+\s+[A-Z][A-Z /-]+$/.test(l.text)){inChapter=false;label=t;}
+    else if(/^[1-9]\d*\.\d+\.?\s+[A-Z/]/.test(l.text))label=t;
+   }
    const footer=lines.find(l=>l.y>viewport.height-90&&/^-\s*\d+\s*-/.test(l.text));
    pageInfo.push({n,page,viewport,items,lines,text,label,inChapter,printed:footer?Number(footer.text.match(/^-\s*(\d+)/)[1]):n});
   }
-  const intro=pageInfo.slice(0,2).map(p=>p.text).join('\n'),defaults=productsFromText(intro,['未辨識產品']);
+  const intro=pageInfo.slice(0,2).map(p=>p.text).join('\n');
+  const headerProducts=productsFromText(pageInfo.slice(0,2).flatMap(p=>p.lines.filter(l=>l.y<100).map(l=>l.text)).join(' '));
+  const defaults=headerProducts.length?headerProducts:productsFromText(intro,['未辨識產品']);
   let selected=pages.length?pageInfo.filter(p=>pages.includes(p.n)):pageInfo.filter(p=>p.inChapter);
   if(!selected.length&&!pages.length){selected=pageInfo.filter(p=>/(DC|AC) Electrical|AC Measurement|Program and Erase Timing/i.test(p.label));}
-  if(!selected.length)throw Error('找不到電性規格章節。請指定 PDF 實際頁次；掃描圖片需要先經過文字辨識。');
+  if(!selected.length&&!pages.length)selected=pageInfo.filter(p=>/\b(?:PARAMETER|DESCRIPTION)\b/i.test(p.text)&&/\bSYMBOL\b/i.test(p.text)&&/\b(?:MIN|TYP|MAX)\b/i.test(p.text));
+  if(!selected.length)throw Error(pageInfo.some(p=>p.text.trim())?'已讀取 PDF 文字，但找不到可辨識的電性規格章節或表格。請指定 PDF 實際頁次。':'PDF 未包含可擷取的文字；若為掃描圖片，請先經過文字辨識。');
   const rows=[],review=[],sources=[];
+  if(defaults.includes('未辨識產品'))review.push({page:1,pdf_page:1,table:0,section:'產品辨識',reason:'無法可靠辨識產品名稱，請核對原文。',raw:[[intro]]});
   for(let j=0;j<selected.length;j++){
    const p=selected[j];onProgress({stage:'tables',current:j+1,total:selected.length});
    const ops=await p.page.getOperatorList(),tables=groupTables(findCells(rulingLines(ops,pdfjs.OPS,p.viewport)));
-   const kind=/DC Electrical/i.test(p.label)?'DC':/^AC\b/i.test(p.label)?'AC':'Other';
+   const kind=specKind(p.label);
+   const pageProducts=productsFromText(p.lines.filter(l=>l.y<85).map(l=>l.text).join(' '),defaults);
    sources.push({page:p.printed,pdf_page:p.n,section:p.label,text:p.text});
    for(let t=0;t<tables.length;t++){
     const table=tables[t],near=p.lines.filter(l=>l.y<table.bbox[1]&&l.y>table.bbox[1]-45).map(l=>l.text).join(' ');
-    const meta={page:p.printed,pdfPage:p.n,kind,section:p.label+' | '+near,table:t+1,notes:p.text.includes('Notes:')?p.text.split('Notes:').slice(1).join('Notes:'):''};
-    const parsed=normalizeTable(table,p.items,defaults,meta);let got=parsed.rows;
-    if(!got.length)got=normalizeFrequency(table,p.items,defaults,{...meta,kind:'AC'});
+    const tableLabel=near.match(/(?:DC Electrical|AC Electrical|AC Measurement|IO Capacitance|Program.*Erase)/i)?near:p.label;
+    const meta={page:p.printed,pdfPage:p.n,kind:specKind(tableLabel)||kind,section:p.label+' | '+near,table:t+1,notes:p.text.includes('Notes:')?p.text.split('Notes:').slice(1).join('Notes:'):''};
+    const parsed=normalizeTable(table,p.items,pageProducts,meta);let got=parsed.rows;
+    if(!got.length)got=normalizeFrequency(table,p.items,pageProducts,{...meta,kind:'AC'});
     rows.push(...got);
     if((!got.length&&textIn(p.items,table.bbox).trim())||parsed.unparsed.length){review.push({page:p.printed,pdf_page:p.n,table:t+1,section:p.label,reason:!got.length?'未能可靠轉成固定欄位，請核對原表。':'部分規格未能辨識限制值，已保留原文。',raw:parsed.unparsed.length?parsed.unparsed:[[textIn(p.items,table.bbox)]]});}
    }
@@ -53,3 +68,5 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
   return {rows,review,sources,products:[...new Set(rows.map(r=>r['產品名稱']))].sort()};
  }finally{await task.destroy();}
 }
+
+function specKind(label){return /(?:DC|D\.C\.)\s+Electrical/i.test(label)?'DC':/\b(?:AC|A\.C\.)\s+(?:Electrical|Measurement)|Program.*(?:Erase|Timing)|Erase.*Timing/i.test(label)?'AC':'Other';}
