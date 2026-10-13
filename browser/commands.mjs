@@ -1,6 +1,7 @@
 // Command (instruction set) tables are located by header signature, never by fixed page numbers.
 import {clean} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
+import {isByteCommandTable,parseByteCommandTable} from './byte-commands.mjs';
 
 export const OPCODE_RE=/\b[0-9A-F]{2}h\b/i;
 const HEADER={
@@ -30,10 +31,12 @@ function headerColumns(table,text){
 }
 export function isCommandTable(table,items){
  if(table.cells.length<6)return false;
+ if(isByteCommandTable(table,items))return true;
  const keys=headerColumns(table,c=>textIn(items,c)).columns.map(c=>c.key);
  return keys.includes('command')&&keys.includes('opcode')&&['address','dummy','data'].some(k=>keys.includes(k));
 }
 export function parseCommandTable(table,items,meta,state={}){
+ if(isByteCommandTable(table,items))return parseByteCommandTable(table,items,meta);
  const cache=new Map(),text=c=>{const k=c.join(',');if(!cache.has(k))cache.set(k,clean(textIn(items,c)));return cache.get(k);};
  const {columns,bottom}=headerColumns(table,text);const headerLabels=new Set(columns.map(c=>c.label.toLowerCase()));
  const body=table.cells.filter(c=>c[1]>=bottom-1);const ys=[...new Set(body.map(c=>Math.round(c[1]*10)/10))].sort((a,b)=>a-b);

@@ -18,7 +18,7 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
    onProgress({stage:'text',current:n,total:doc.numPages});
    const page=await doc.getPage(n),viewport=page.getViewport({scale:1}),items=textItems(await getPageTextContent(page),viewport),lines=linesOfText(items),text=lines.map(l=>l.text).join('\n');
    const topLines=lines.filter(l=>l.y<180&&!/\.{3}|…/.test(l.text));
-   const title=l=>l.text.replace(/^\d+(?:\.\d+)*\.?\s+/,'');
+   const title=l=>l.text.replace(/^\d+(?:\.\d+)*(?:\.\s*|\s+)/,'');
    const electrical=/^(?:(?:DC|AC|D\.C\.|A\.C\.)\s+)?Electrical Characteristics\b/i;
    const section=/^(?:(?:DC|AC|D\.C\.|A\.C\.)\s+(?:Electrical Characteristics|Measurement Conditions)|IO Capacitance|Absolute Maximum Ratings|Operating Ranges|Recommended Operating|Power[- ]up|Program.*(?:Erase|Timing)|Erase.*Timing|Serial.*Frequency)/i;
    const end=/^(?:PACKAGE|PACKAGING|ORDERING|REVISION HISTORY|REVISION TABLE|IMPORTANT NOTICE)\b/i;
@@ -81,6 +81,13 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
     if(parsed.unparsed.length)review.push({page:p.printed,pdf_page:p.n,table:t+1,section:'指令表 / '+section,reason:'指令表部分列未能辨識，已保留原文。',raw:parsed.unparsed});
    }
   }}catch(e){commands.length=0;review.push({page:'',pdf_page:'',table:0,section:'指令表',reason:'指令表解析失敗，已略過（規格擷取不受影響）。',raw:[[e.message||String(e)]]});}
+  // Keep the byte/clock evidence and following notes available for manual verification.
+  for(const n of new Set(commands.map(c=>c.pdf_page))){
+   const p=pageInfo[n-1],next=pageInfo[n];
+   for(const source of [p,...(next?.lines.some(l=>l.y<180&&/^Notes?:\s*$/i.test(l.text))?[next]:[])]){
+    if(!sources.some(s=>s.pdf_page===source.n))sources.push({page:source.printed,pdf_page:source.n,section:'指令表 / '+(source===p?commands.find(c=>c.pdf_page===n).section:'Notes'),text:source.text});
+   }
+  }
   linkCommands(rows,commands);
   return {rows,review,sources,commands,command_pages:[...new Set(commands.map(c=>c.pdf_page))],products:[...new Set(rows.map(r=>r['產品名稱']))].sort()};
  }finally{await task.destroy();}
