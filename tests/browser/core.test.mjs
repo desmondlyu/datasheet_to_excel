@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {compareRows, COLUMNS, productsFromText, parsePageInput, numericValue} from '../../browser/spec-core.mjs';
+import {compareRows, COLUMNS, productsFromText, parsePageInput, numericValue, makeRow} from '../../browser/spec-core.mjs';
 const row=(extra={})=>({...Object.fromEntries(COLUMNS.map(c=>[c,''])),產品名稱:'W25Q32RW',symbol:'ICC1',parameter:'Standby Current',condition:'/CS = VCC',max:50,'spec type':'DC',...extra});
 test('family expands slash shorthand, preserving all products',()=>assert.equal(productsFromText('W25Q32/64/12/25/51/01/02RW-DTR W25Q32RW').length,7));
 test('explicit pages validate and deduplicate',()=>{assert.deepEqual(parsePageInput('169,170,169'),[169,170]);assert.throws(()=>parsePageInput('0'));assert.throws(()=>parsePageInput('abc'));});
@@ -28,4 +28,21 @@ test('ranges exclude unrelated families from an interleaved document catalogue',
 });
 test('a range preserves additional explicitly named products',()=>{
  assert.deepEqual(productsFromText('W35T32NW–W35T64NW W35T51NW',['W35T32NW','W35T64NW','W35T51NW']),['W35T32NW','W35T64NW','W35T51NW']);
+});
+
+test('ordinary conditions populate Starting Address only for explicit unambiguous values',()=>{
+ const meta={kind:'AC',page:1,pdfPage:1,section:'AC',table:1};
+ for(const [condition,expected] of [
+  ['Starting Address: Aligned','Aligned'],
+  ['Starting Address: Any','Any'],
+  ['SPI; starting address = any; Dummy=6','Any'],
+  ['Starting Address：aligned','Aligned'],
+  ['Any address is allowed',undefined],
+  ['Starting Address: Aligned / Any',undefined],
+  ['Starting Address: Aligned; Starting Address: Any',undefined],
+  ['',undefined]
+ ]){
+  const r=makeRow('X',{parameter:'Clock frequency',symbol:'fR',condition,max:100},meta);
+  assert.equal(r._start,expected,condition);assert.equal(r.condition,condition);
+ }
 });

@@ -31,6 +31,9 @@ test('private reference PDF without stream async iteration: products, DC/AC, mat
  assert.match(freq[0].condition,/DS bit enabled/);
  assert.ok(freq.every(x=>x._opcode==='EBh'&&x._dummy===16&&x._mode&&/byte/i.test(x._address)&&['Aligned','Any'].includes(x._start)));
  assert.equal(r.rows.length,1442);
+ const ordinary=r.rows.filter(x=>x.symbol==='fR'&&/^Starting Address: (Aligned|Any)$/.test(x.condition));
+ assert.equal(ordinary.length,14);
+ assert.ok(ordinary.every(x=>x._start===x.condition.split(': ')[1]));
  assert.ok(compareRows(r.rows,r.rows).every(x=>x._status==='unchanged'));
  assert.deepEqual(r.command_pages,[56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71]);
  assert.ok(r.commands.some(c=>c.command==='Page Program'&&c.opcode==='02h'&&c.mode==='1-1-1'));

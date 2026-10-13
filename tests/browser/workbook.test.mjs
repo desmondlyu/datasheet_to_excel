@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import {makeWorkbook,COMPARE_SHEET,COMPARE_HEADERS,COMMAND_SHEET,COMMAND_HEADERS} from '../../browser/workbook.mjs';
-import {COLUMNS,compareRows} from '../../browser/spec-core.mjs';
+import {COLUMNS,compareRows,makeRow} from '../../browser/spec-core.mjs';
 const blank=()=>Object.fromEntries(COLUMNS.map(c=>[c,'']));
 const load=async result=>{const w=new ExcelJS.Workbook();await w.xlsx.load(await makeWorkbook(result));return w;};
 test('XLSX uses comparison headers, numeric limits, blank cells and inert formula text',async()=>{
@@ -71,4 +71,13 @@ test('related opcodes move to Opcode without shifting mode/address/dummy columns
  assert.deepEqual(['J','K','L','M'].map(c=>s.getCell(c+'3').value),['SPI','3-/4-byte Address',6,'Aligned']);
  assert.equal(s.getCell('I4').value,'20h, 21h');assert.equal(s.getCell('N4').value,null);
  assert.equal(r._commands,'12h Page Program with 4-Byte Addr（1-1-1）；02h Page Program（1-1-1）；02h Page Program（4-4-4）；C7h/60h Chip Erase');
+});
+
+test('ordinary Aligned and Any conditions appear separately in column M',async()=>{
+ const rows=['Aligned','Any'].map((value,i)=>makeRow('X',{symbol:'fR',parameter:'Read clock frequency',condition:'Starting Address: '+value,max:100-i*20},{kind:'AC',page:1,pdfPage:1,section:'AC',table:1}));
+ const s=(await load({rows})).getWorksheet(COMPARE_SHEET);
+ assert.equal(s.getCell('M1').value,'Starting Address');
+ assert.deepEqual(['M2','M3'].map(c=>s.getCell(c).value),['Aligned','Any']);
+ assert.deepEqual(['Q2','Q3'].map(c=>s.getCell(c).value),['Starting Address: Aligned','Starting Address: Any']);
+ assert.deepEqual(['E2','E3'].map(c=>s.getCell(c).value),[100,80]);
 });

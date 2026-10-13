@@ -28,7 +28,7 @@ export async function makeWorkbook(result){
   ['未變更','新舊版內容相同。'],
   ['未比對','匯出時未提供舊版 PDF，只列出新版規格。'],
   ['',''],['【配對規則】','以 產品名稱 + spec type + symbol + parameter + condition 配對新舊版。條件或規格名稱改寫時，可能顯示為一筆「新增」加一筆「移除」，請人工核對。'],
-  ['【頻率條件欄】','Opcode 統一列出指令碼：優先使用頻率矩陣的指令碼，其他規格由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy／Starting Address 仍由頻率矩陣拆出；condition 保留完整條件。'],
+  ['【頻率條件欄】','Opcode 統一列出指令碼：優先使用頻率矩陣的指令碼，其他規格由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy 由頻率矩陣拆出；Starting Address 也會從一般規格的 condition 擷取 Aligned／Any，condition 保留完整條件。'],
   ['【相關指令】','列出與該規格相關的指令名稱及介面模式；指令碼統一放在 Opcode 欄，詳細 Address／Dummy／Data 請查「指令表」。相關指令僅供查詢，不影響「比較結果」。'],
   ['原文標示 opcode','parameter 原文已寫明 opcode（例如 (20h/21h)），依此 opcode 從指令表帶出指令名稱。'],
   ['名稱規則對應','依明確的名稱規則對應（例如 Page Program Time → Page Program 類指令），非原文直接標示，建議核對。'],

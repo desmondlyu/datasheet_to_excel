@@ -32,6 +32,9 @@ export function makeRow(product,v,meta){
  const r=Object.fromEntries(COLUMNS.map(c=>[c,'']));let desc=[];
  let symbol=clean(v.symbol).replace(/\((\d+)\)/g,(_,n)=>{desc.push('Note '+n);return '';}).replace(/\s+/g,'').trim();
  Object.assign(r,{'產品名稱':product,symbol,parameter:clean(v.parameter),condition:stripProducts(v.condition||'',v.products||[]),unit:clean(v.unit),'spec type':meta.kind,page:meta.page,_pdf_page:meta.pdfPage,_section:meta.section,_table:meta.table,_status:'uncompared',_notes:meta.notes||''});
+ // Ordinary spec tables also carry alignment in their condition column.
+ const starts=new Set([...r.condition.matchAll(/(?:^|[;；])\s*Starting\s+Address\s*[:=：]\s*(Aligned|Any)\s*(?=[;；]|$)/gi)].map(m=>m[1].toLowerCase()==='aligned'?'Aligned':'Any'));
+ if(starts.size===1)r._start=[...starts][0];
  for(const k of ['max','typ','min'])r[k]=numericValue(clean(v[k]).replace(/\((\d+)\)/g,(_,n)=>{desc.push(k+': Note '+n);return '';}));
  if(/Factory Mode/i.test(meta.section))r.condition=[r.condition,'Factory Mode'].filter(Boolean).join('; ');
  const temperature=meta.section.match(/Operating Temperature[^|)]*/i)?.[0];

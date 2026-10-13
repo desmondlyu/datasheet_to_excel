@@ -41,7 +41,7 @@ npm run preview
 
 `比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | max | typ | min | symbol | Opcode | SPI/QPI | 3/4 byte address | Dummy | Starting Address | 相關指令 | 對應依據 | parameter | condition | description | unit | spec type | 新版頁碼 | 舊版頁碼`
 
-- Opcode 優先使用頻率矩陣指令碼，其他規格則由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy／Starting Address 由頻率矩陣拆出；condition 仍保留完整條件。
+- Opcode 優先使用頻率矩陣指令碼，其他規格則由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy 由頻率矩陣拆出；Starting Address 也會從一般規格的 condition 擷取 Aligned／Any，放入 M 欄。condition 仍保留完整條件。
 - 相關指令／對應依據：從 PDF 指令表帶出與規格相關的指令名稱與介面模式，指令碼統一放在 Opcode 欄。對應依據為「原文標示 opcode」（parameter 已寫明 opcode）或「名稱規則對應」（明確名稱規則，例如 Page Program Time → Page Program 類指令）；找不到可靠對應則留空，不猜測。相關指令不影響「比較結果」。
 
 - 每個產品、規格、條件獨立一列，數值單位獨立。
