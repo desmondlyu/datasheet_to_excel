@@ -1,4 +1,4 @@
-export const BUILD_ID='2026-10-13.2';
+export const BUILD_ID='2026-10-13.3';
 
 // Keep this report local. It contains runtime details, not PDF contents.
 export function diagnosticText(error,{phase='',browser=''}={}){

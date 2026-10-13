@@ -31,7 +31,7 @@ npm run preview
 
 1. 選擇或拖入新版 PDF；需要比對時，勾選比對並選擇舊版。
 2. 頁碼留白時沿用電性章節偵測。指定頁碼請填 **PDF 實際頁次**（例如 `169,170,171`），不是頁尾印刷頁碼；新舊版可以分開指定。
-3. 按「解析並預覽」，依產品、AC/DC、symbol、parameter、條件及比對狀態篩選。
+3. 按「解析並預覽」，預覽與 Excel「產品規格比較表」共用相同的 22 欄、欄位順序與內容。依產品、AC/DC 及比對狀態篩選，或搜尋任一顯示欄位（包含 Opcode、相關指令及變更說明）。
 4. 點選規格列查看完整欄位、來源章節、PDF 頁次與註解。
 5. 按「下載全部 Excel」或「下載篩選結果」。待核對原表與來源文字仍完整保留，方便追查。
 
@@ -41,8 +41,8 @@ npm run preview
 
 `比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | max | typ | min | symbol | Opcode | SPI/QPI | 3/4 byte address | Dummy | Starting Address | 相關指令 | 對應依據 | parameter | condition | description | unit | spec type | 新版頁碼 | 舊版頁碼`
 
-- Opcode／SPI/QPI／3/4 byte address／Dummy／Starting Address 由頻率矩陣拆出，只有頻率規格有值；condition 仍保留完整條件。
-- 相關指令／對應依據：從 PDF 指令表帶出與規格相關的 opcode、指令名稱與介面模式。對應依據為「原文標示 opcode」（parameter 已寫明 opcode）或「名稱規則對應」（明確名稱規則，例如 Page Program Time → Page Program 類指令）；找不到可靠對應則留空，不猜測。相關指令不影響「比較結果」。
+- Opcode 優先使用頻率矩陣指令碼，其他規格則由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy／Starting Address 由頻率矩陣拆出；condition 仍保留完整條件。
+- 相關指令／對應依據：從 PDF 指令表帶出與規格相關的指令名稱與介面模式，指令碼統一放在 Opcode 欄。對應依據為「原文標示 opcode」（parameter 已寫明 opcode）或「名稱規則對應」（明確名稱規則，例如 Page Program Time → Page Program 類指令）；找不到可靠對應則留空，不猜測。相關指令不影響「比較結果」。
 
 - 每個產品、規格、條件獨立一列，數值單位獨立。
 - 空白保持空白，0 仍是數字 0；± 和 VCC 表達式保留文字。
