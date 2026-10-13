@@ -1,4 +1,5 @@
 import {parsePageInput} from './spec-core.mjs';
+import {COMPARE_HEADERS,compareRow} from './comparison-display.mjs';
 import {BUILD_ID,diagnosticText} from './diagnostics.mjs';
 'use strict';
 const $=id=>document.getElementById(id);
@@ -6,7 +7,6 @@ $('build-version').textContent='v'+BUILD_ID;
 function clearError(){$('error').hidden=true;$('error-detail').hidden=true;$('error-report').textContent='';}
 function showError(error,phase){$('error').textContent=error.message||'解析失敗，請重試。';$('error').hidden=false;$('error-report').textContent=diagnosticText(error.diagnostic||error,{phase,browser:navigator.userAgent});$('error-detail').hidden=false;}
 let result=null, page=0; const pageSize=60;
-const labels={uncompared:'未比對',unchanged:'未變更',changed:'變更',added:'新增',removed:'移除',review:'待確認'};
 function el(tag,text,cls){const x=document.createElement(tag);if(text!==undefined)x.textContent=text;if(cls)x.className=cls;return x;}
 function fileName(){ $('new-label').textContent=$('new-file').files[0]?.name||'選擇或拖入 PDF'; }
 $('new-file').addEventListener('change',fileName);
@@ -44,18 +44,18 @@ $('upload-form').addEventListener('submit',async e=>{
  }catch(err){if(run!==generation)return;showError(err,phase);$('progress').textContent='本次解析未完成，請確認檔案或頁碼後重試。';clearResult();}
  finally{if(run===generation){activeWorker?.terminate();activeWorker=null;busy(false);}}
 });
-function filtered(){if(!result)return [];const q=$('search').value.toLowerCase();return result.rows.filter(r=>(!$('product').value||r['產品名稱']===$('product').value)&&(!$('kind').value||r['spec type']===$('kind').value)&&(!$('status').value||r._status===$('status').value)&&(!q||result.columns.map(c=>String(r[c]??'')).join(' ').toLowerCase().includes(q)));}
+function filtered(){if(!result)return [];const q=$('search').value.toLowerCase();return result.rows.filter(r=>(!$('product').value||r['產品名稱']===$('product').value)&&(!$('kind').value||r['spec type']===$('kind').value)&&(!$('status').value||r._status===$('status').value)&&(!q||compareRow(r).map(v=>String(v??'')).join(' ').toLowerCase().includes(q)));}
 function render(){
  const rows=filtered();$('empty').hidden=!!result;$('table-wrap').hidden=!result;
- const head=el('tr');['狀態',...(result?.columns||[])].forEach(c=>head.append(el('th',c)));$('spec-table').tHead.replaceChildren(head);
+ const head=el('tr');COMPARE_HEADERS.forEach(c=>{const th=el('th',c);th.scope='col';head.append(th);});$('spec-table').tHead.replaceChildren(head);
  const body=$('spec-table').tBodies[0];body.replaceChildren();const pages=Math.max(1,Math.ceil(rows.length/pageSize));page=Math.min(page,pages-1);
- rows.slice(page*pageSize,(page+1)*pageSize).forEach(r=>{const tr=el('tr');tr.tabIndex=0;tr.setAttribute('aria-label',`${r['產品名稱']} ${r.symbol||r.parameter} 規格詳情`);const s=el('td');s.append(el('span',labels[r._status],`status ${r._status}`));tr.append(s);result.columns.forEach(c=>{const td=el('td',r[c]??'');if(r._changes?.[c]){td.className='changed-cell';td.title=`舊值：${r._changes[c].old}`;}tr.append(td);});tr.addEventListener('click',()=>detail(r));tr.addEventListener('keydown',e=>{if(e.key==='Enter'){detail(r);}});body.append(tr);});
- if(result&&!rows.length){const tr=el('tr');const td=el('td','沒有符合篩選條件的規格。');td.colSpan=result.columns.length+1;tr.append(td);body.append(tr);}
+ rows.slice(page*pageSize,(page+1)*pageSize).forEach(r=>{const tr=el('tr');tr.tabIndex=0;tr.setAttribute('aria-label',`${r['產品名稱']} ${r.symbol||r.parameter} 規格詳情`);tr.className=`row-${r._status}`;compareRow(r).forEach((value,i)=>{const c=COMPARE_HEADERS[i],td=el('td');td.dataset.column=c;if(i===0)td.append(el('span',value,`status ${r._status}`));else td.textContent=value??'';if(r._changes?.[c]){td.className='changed-cell';td.title=`舊值：${r._changes[c].old}`;}tr.append(td);});tr.addEventListener('click',()=>detail(r));tr.addEventListener('keydown',e=>{if(e.key==='Enter'){detail(r);}});body.append(tr);});
+ if(result&&!rows.length){const tr=el('tr');const td=el('td','沒有符合篩選條件的規格。');td.colSpan=COMPARE_HEADERS.length;tr.append(td);body.append(tr);}
  $('shown').textContent=result?`符合 ${rows.length.toLocaleString()} 列 ／ 全部 ${result.rows.length.toLocaleString()} 列`:'尚無資料';$('pagination').textContent=result?`${page+1} / ${pages}`:'';$('prev').disabled=page===0;$('next').disabled=page>=pages-1;
 }
 for(const id of ['search','product','kind','status'])$(id).addEventListener(id==='search'?'input':'change',()=>{page=0;render();});
 $('prev').onclick=()=>{page--;render();};$('next').onclick=()=>{page++;render();};
-function detail(r){const dl=el('dl');result.columns.forEach(c=>{dl.append(el('dt',c),el('dd',r[c]!==''?r[c]:'未提供'));});dl.append(el('dt','PDF 實際頁次'),el('dd',r._pdf_page||'—'),el('dt','章節'),el('dd',r._section||'—'));const wrap=$('detail-content');wrap.replaceChildren(dl);if(r._status==='review')wrap.append(el('p','相同產品／規格／條件出現多筆資料，未自動判定配對，請核對原文。'));if(r._candidates?.length){wrap.append(el('h3','舊版候選規格（未自動配對）'));for(const p of r._candidates)wrap.append(el('pre',result.columns.map(c=>`${c}: ${p[c]??''}`).join('\n')+`\nPDF 實際頁次: ${p._pdf_page||'—'}`));}if(r._changes&&Object.keys(r._changes).length){wrap.append(el('h3','版本差異'));for(const [k,v] of Object.entries(r._changes))wrap.append(el('p',`${k}：${v.old===''?'空白':v.old} → ${v.new===''?'空白':v.new}`));}if(r._notes){wrap.append(el('h3','原文註解'),el('pre',r._notes));}$('detail').showModal();}
+function detail(r){const dl=el('dl');compareRow(r).forEach((value,i)=>{dl.append(el('dt',COMPARE_HEADERS[i]),el('dd',value!==''&&value!==undefined&&value!==null?value:'未提供'));});dl.append(el('dt','PDF 實際頁次'),el('dd',r._pdf_page||'—'),el('dt','章節'),el('dd',r._section||'—'));const wrap=$('detail-content');wrap.replaceChildren(dl);if(r._status==='review')wrap.append(el('p','相同產品／規格／條件出現多筆資料，未自動判定配對，請核對原文。'));if(r._candidates?.length){wrap.append(el('h3','舊版候選規格（未自動配對）'));for(const p of r._candidates)wrap.append(el('pre',result.columns.map(c=>`${c}: ${p[c]??''}`).join('\n')+`\nPDF 實際頁次: ${p._pdf_page||'—'}`));}if(r._changes&&Object.keys(r._changes).length){wrap.append(el('h3','版本差異'));for(const [k,v] of Object.entries(r._changes))wrap.append(el('p',`${k}：${v.old===''?'空白':v.old} → ${v.new===''?'空白':v.new}`));}if(r._notes){wrap.append(el('h3','原文註解'),el('pre',r._notes));}$('detail').showModal();}
 $('close-detail').onclick=()=>$('detail').close();
 function rawViews(){const rev=$('review-list');rev.replaceChildren();if(!result.review.length)rev.append(el('p','沒有待核對的未轉換表格。'));result.review.forEach(r=>{const d=el('details');d.append(el('summary',`第 ${r.page} 頁 · ${r.section}`),el('p',r.reason));const wrap=el('div',undefined,'raw-table');const t=el('table');r.raw.forEach(row=>{const tr=el('tr');row.forEach(c=>tr.append(el('td',c||'')));t.append(tr);});wrap.append(t);d.append(wrap);rev.append(d);});const src=$('source-list');src.replaceChildren();result.sources.forEach(s=>{const d=el('details');d.append(el('summary',`文件第 ${s.page} 頁 ／ PDF 第 ${s.pdf_page} 頁　${s.section}`),el('pre',s.text));src.append(d);});}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));$(x.dataset.tab+'-panel').hidden=x!==b;});});
