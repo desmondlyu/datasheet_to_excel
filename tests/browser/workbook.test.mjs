@@ -82,13 +82,16 @@ test('ordinary Aligned and Any conditions appear separately in column N',async()
  assert.deepEqual(['R2','R3'].map(c=>s.getCell(c).value),['Starting Address: Aligned','Starting Address: Any']);
  assert.deepEqual(['G2','G3'].map(c=>s.getCell(c).value),[100,80]);
 });
-test('both sheets remove opcode and dummy footnotes while retaining effective settings',async()=>{
+test('both sheets remove numeric and default dummy notes while retaining raw source evidence',async()=>{
  const commands=[{command:'Read',opcode:'EBh(2)',dummy:'16(3)'},{command:'Read',opcode:'EDh(11,14)',dummy:'6 (Def)'}];
- const w=await load({rows:[{...blank(),_opcode:'EBh(2)',_dummy:'16(3)'}],commands});
+ const w=await load({rows:[{...blank(),_opcode:'EBh(2)',_dummy:'16(3)'},{...blank(),_dummy:'6 (Def)'}],commands,sources:[{page:1,pdf_page:1,section:'Test fixture',text:'Dummy=6 (Def)'}]});
  const s=w.getWorksheet(COMPARE_SHEET),c=w.getWorksheet(COMMAND_SHEET);
  assert.equal(s.getCell('E2').value,'EBh');assert.equal(s.getCell('M2').value,16);
  assert.equal(c.getCell('E2').value,'EBh');assert.equal(c.getCell('H2').value,'16');
- assert.equal(c.getCell('E3').value,'EDh');assert.equal(c.getCell('H3').value,'6 (Def)');
+ assert.equal(c.getCell('E3').value,'EDh');assert.equal(c.getCell('H3').value,'6');
+ assert.equal(s.getCell('M3').value,6);
+ assert.equal(w.getWorksheet('Source').getCell('D2').value,'Dummy=6 (Def)');
+ assert.equal(commands[1].dummy,'6 (Def)');
  const text=[];w.getWorksheet('說明').eachRow(r=>text.push(r.values.slice(1).join('|')));
  assert.doesNotMatch(text.join('\n'),/對應依據/);
 });

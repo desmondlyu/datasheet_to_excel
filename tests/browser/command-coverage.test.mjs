@@ -45,12 +45,13 @@ test('provided PDF collection exports all user commands with template header ord
   sheet.eachRow((row,n)=>{if(n===1)return;
    assert.equal(row.getCell(5).value??'',compareRow(r.rows[n-2])[4]??'');
    assert.ok(!footnote.test(String(row.getCell(5).value||'')));assert.ok(!footnote.test(String(row.getCell(13).value||'')));
+   assert.ok(!/\(\s*Def\s*\)/i.test(String(row.getCell(13).value||'')));
    if(row.getCell(15).value==='Command'){codes(row.getCell(5).value).forEach(code=>exportedCodes.add(code));exportedNames.add(row.getCell(17).value);
     assert.ok([6,7,8,9,10].every(col=>row.getCell(col).value===null));
    }
   });
   assert.deepEqual(exportedCodes,extractedCodes);assert.deepEqual(exportedNames,extractedNames);
-  book.getWorksheet(COMMAND_SHEET).eachRow((row,n)=>{if(n>1){assert.ok(!footnote.test(String(row.getCell(5).value||'')));assert.ok(!footnote.test(String(row.getCell(8).value||'')));}});
+  book.getWorksheet(COMMAND_SHEET).eachRow((row,n)=>{if(n>1){assert.ok(!footnote.test(String(row.getCell(5).value||'')));assert.ok(!footnote.test(String(row.getCell(8).value||'')));assert.ok(!/\(\s*Def\s*\)/i.test(String(row.getCell(8).value||'')));}});
   if(file.startsWith('W25Q32_')){
    const task=quiet.getDocument({data:new Uint8Array(data)});
    try{

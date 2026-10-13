@@ -1,5 +1,5 @@
 // Instruction tables that describe the transfer byte by byte instead of named phases.
-import {clean,stripNumericNotes} from './spec-core.mjs';
+import {clean,stripNumericNotes,stripDummyNotes} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 
 const isLabel=s=>/^Data\s+Input\s*\/?\s*Output$/i.test(s);
@@ -45,7 +45,7 @@ export function parseByteCommandTable(table,items,meta){
    else data.push(`${labels}: ${value}`);
   }
   rows.push({command:clean(name.replace(/\(\d+(?:\s*,\s*\d+)*\)/g,'')),opcode,mode,
-   address:address.join(', '),dummy:stripNumericNotes(dummy.join('; ')),data:data.join('; '),
+   address:address.join(', '),dummy:stripDummyNotes(dummy.join('; ')),data:data.join('; '),
    extra:`${name}; ${raw.join('; ')}`,setting:'',group,section:meta.section,page:meta.page,pdf_page:meta.pdfPage});
  }
  return {rows,unparsed};

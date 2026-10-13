@@ -1,5 +1,5 @@
 // Command (instruction set) tables are located by header signature, never by fixed page numbers.
-import {clean,makeRow,numericValue,stripNumericNotes} from './spec-core.mjs';
+import {clean,makeRow,numericValue,stripNumericNotes,stripDummyNotes} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 import {isByteCommandTable,parseByteCommandTable} from './byte-commands.mjs';
 
@@ -54,7 +54,7 @@ export function parseCommandTable(table,items,meta,state={}){
   if(distinct.size===1&&!OPCODE_RE.test(rowText)){state.group=rowText;continue;}
   const modes=columns.map((c,j)=>c.key==='mode'&&v[j]&&v[j]!=='-'?`${v[j]}（${c.label.replace(/^.*?\b(SDR|ODDR|DDR|STR|DTR)\b.*$/i,'$1')}）`:'').filter(Boolean);
   const extra=columns.map((c,j)=>c.key==='extra'&&v[j]&&!/^MHz$/i.test(v[j])?`${c.label}${state.units?.[c.label]?` (${state.units[c.label]})`:''}: ${v[j]}`:'').filter(Boolean).join('; ');
-  const record={command,opcode,mode:modes.join('；')||state.io||'',address:get('address').join(' '),dummy:stripNumericNotes(get('dummy').join(' ')),data:get('data').join(' '),extra,setting:'',group:state.group||'',section:meta.section,page:meta.page,pdf_page:meta.pdfPage};
+  const record={command,opcode,mode:modes.join('；')||state.io||'',address:get('address').join(' '),dummy:stripDummyNotes(get('dummy').join(' ')),data:get('data').join(' '),extra,setting:'',group:state.group||'',section:meta.section,page:meta.page,pdf_page:meta.pdfPage};
   const variant=command.match(/^(.*?)\s+([01](?:\s*[01]){1,3})$/);
   if(variant&&state.last&&(opcode===state.last.opcode||/^[01\s]+$/.test(opcode))){rows.push({...record,command:state.last.command,opcode:state.last.opcode,setting:`${variant[1].replace(/\s*M7.*$/,'')} = ${variant[2].replace(/\s+/g,'')}`});continue;}
   const bits=opcode.replace(/\s+/g,'');
@@ -70,7 +70,7 @@ export function commandSpecRows(commands,products){
  for(const c of commands){
   const scope=[c.section,c.group].filter(Boolean).join(' ');
   if(/\bFactory[\s-]+(?:Mode|Only)\b/i.test(scope)&&!/\bUser[\s-]+Mode\b/i.test(scope))continue;
-  const opcode=stripNumericNotes(c.opcode),dummy=numericValue(stripNumericNotes(c.dummy));
+  const opcode=stripNumericNotes(c.opcode),dummy=numericValue(stripDummyNotes(c.dummy));
   const condition=[`opcode=${opcode}`,c.mode?`IO=${c.mode}`:'',c.setting].filter(Boolean).join('; ');
   for(const product of products){
    const r=makeRow(product,{parameter:c.command,condition},{kind:'Command',page:c.page,pdfPage:c.pdf_page,section:clean(c.section)});

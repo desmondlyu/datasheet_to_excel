@@ -1,6 +1,7 @@
 export const COLUMNS=['產品名稱','max','typ','min','symbol','parameter','condition','description','unit','spec type','page'];
 export const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
 export const stripNumericNotes=v=>typeof v==='string'?clean(v.replace(/\(\s*\d+(?:\s*[,，]\s*\d+)*\s*\)/g,'')):v;
+export const stripDummyNotes=v=>stripNumericNotes(typeof v==='string'?v.replace(/\(\s*Def\s*\)/gi,''):v);
 export function numericValue(v){const s=clean(v).replace(/^([+−–-])\s+(?=\d)/,'$1');return /^[+−–-]?\d[\d,]*(?:\.\d+)?$/.test(s)?Number(s.replace(/,/g,'').replace(/[−–]/g,'-')):s;}
 export function parsePageInput(s){if(!s?.trim())return [];const p=s.split(',').map(x=>x.trim());if(p.some(x=>!/^\d+$/.test(x)||+x<1))throw Error('頁碼請使用正整數，以逗號分隔，例如 169,170,171。');return [...new Set(p.map(Number))];}
 // Model names are evidence from the document, not a built-in product catalogue.

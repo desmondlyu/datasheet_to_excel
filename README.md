@@ -45,7 +45,7 @@ npm run preview
 - Opcode 優先使用頻率矩陣指令碼，其他規格則由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy 由頻率矩陣或指令表帶出；Command 列保留原始 IO 模式與位址位元範圍，不將混合格式擅自換算。Starting Address 也會從一般規格的 condition 擷取 Aligned／Any，放入 N 欄。condition 仍保留完整條件。
 - 相關指令：依原文 opcode 或明確名稱規則（例如 Page Program Time → Page Program 類指令）帶出指令名稱與介面模式；找不到可靠對應則留空，不猜測。指令碼統一放在 Opcode 欄，相關指令不影響原 AC/DC 規格的「比較結果」。
 - 完整 User mode 指令另外以 `spec type = Command` 列入比較表，依產品／IO 模式／設定分列，不再受 AC/DC 對應規則限制。Factory-only 章節不加入，User mode 可執行的 Enter Factory Mode 指令仍保留。symbol／max／typ／min／unit 保持空白，Data 與其他原始欄位放在 description；產品限定請核對 Source 原始 Notes。指定頁碼只限制電性表格，指令表仍由完整 PDF 自動偵測。
-- 比較表與指令表的 Opcode／Dummy 移除 `(2)`、`(11,14)` 等數字註腳，保留 `(Def)` 等有效內容；condition、Source 與原始 Byte 證據仍保留原文。
+- 比較表與指令表的 Opcode／Dummy 移除 `(2)`、`(11,14)` 等數字註腳，Dummy 也移除 `(Def)` 預設註記（例如 `6 (Def)` → `6`），保留數值與其他有效內容；condition、Source 與原始 Byte 證據仍保留原文。
 
 - 每個產品、規格、條件獨立一列，數值單位獨立。
 - 空白保持空白，0 仍是數字 0；± 和 VCC 表達式保留文字。

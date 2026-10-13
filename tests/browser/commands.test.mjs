@@ -82,7 +82,7 @@ test('command address and dummy changes retain pairing and removed-command page 
  assert.deepEqual(rows[0]._changes,{'3/4 byte address':{old:'A23-A0',new:'A31-A0'},Dummy:{old:8,new:16}});
  assert.equal(rows[0]._old_page,56);
 });
-test('named command tables remove numeric opcode and dummy notes without removing defaults',()=>{
+test('named command tables remove numeric opcode notes and numeric/default dummy notes',()=>{
  const annotated=W25.map(c=>[...c]);
  annotated.find(c=>c[4]==='02h')[4]='02h(14)';
  annotated.find(c=>c[0]===200&&c[1]===30)[4]='4(3)';
@@ -90,5 +90,5 @@ test('named command tables remove numeric opcode and dummy notes without removin
  const {table:t,items}=table(annotated);
  const {rows,unparsed}=parseCommandTable(t,items,{page:1,pdfPage:1,section:'SPI'},{});
  assert.deepEqual(unparsed,[]);assert.equal(rows[0].opcode,'02h');
- assert.equal(rows[1].dummy,'4');assert.equal(rows[2].dummy,'6 (Def)');
+ assert.equal(rows[1].dummy,'4');assert.equal(rows[2].dummy,'6');
 });
