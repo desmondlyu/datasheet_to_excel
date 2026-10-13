@@ -50,7 +50,7 @@ test('command sheet lists commands and related-command columns are filled',async
  const r={...blank(),產品名稱:'X',symbol:'tPP',parameter:'Page Program Time',_status:'uncompared',_commands:'02h Page Program（1-1-1）',_command_basis:'名稱規則對應'};
  const cmd={mode:'1-1-1',command:'Page Program',opcode:'02h',setting:'',address:'A23-A0',dummy:'--',data:'D7-D0',extra:'',group:'',section:'6.2.1',page:56,pdf_page:58};
  const w=await load({rows:[r],commands:[cmd],command_pages:[58]});
- const s=w.getWorksheet(COMPARE_SHEET);assert.equal(s.getCell('N2').value,'02h Page Program（1-1-1）');assert.equal(s.getCell('O2').value,'名稱規則對應');
+ const s=w.getWorksheet(COMPARE_SHEET);assert.equal(s.getCell('I2').value,'02h');assert.equal(s.getCell('N2').value,'Page Program（1-1-1）');assert.equal(s.getCell('O2').value,'名稱規則對應');
  const c=w.getWorksheet(COMMAND_SHEET);assert.deepEqual(c.getRow(1).values.slice(1),COMMAND_HEADERS);
  assert.deepEqual([1,2,3,4,5,6,7].map(i=>c.getRow(2).getCell(i).value),['未比對',null,'1-1-1','Page Program','02h',null,'A23-A0']);assert.equal(c.getCell('M2').value,56);
  const text=[];w.getWorksheet('說明').eachRow(x=>text.push(x.values.slice(1).join('|')));assert.match(text.join('\n'),/指令表來源頁（新版）\|PDF 第 58 頁/);
@@ -59,4 +59,16 @@ test('missing command table is stated instead of left blank',async()=>{
  const w=await load({rows:[]});
  assert.match(w.getWorksheet(COMMAND_SHEET).getCell('B2').value,/未偵測到指令表/);
  const text=[];w.getWorksheet('說明').eachRow(x=>text.push(x.values.slice(1).join('|')));assert.match(text.join('\n'),/指令表來源頁（新版）\|未偵測到指令表/);
+});
+
+test('related opcodes move to Opcode without shifting mode/address/dummy columns',async()=>{
+ const r={...blank(),symbol:'tPP',_status:'uncompared',_commands:'12h Page Program with 4-Byte Addr（1-1-1）；02h Page Program（1-1-1）；02h Page Program（4-4-4）；C7h/60h Chip Erase'};
+ const s=(await load({rows:[r,{...r,_opcode:'EBh',_mode:'SPI',_address:'3-/4-byte Address',_dummy:6,_start:'Aligned'},{...blank(),_commands:'20h, 21h'}]})).getWorksheet(COMPARE_SHEET);
+ assert.equal(s.getCell('I2').value,'12h, 02h, C7h, 60h');
+ assert.equal(s.getCell('N2').value,'Page Program with 4-Byte Addr（1-1-1）；Page Program（1-1-1）；Page Program（4-4-4）；Chip Erase');
+ assert.deepEqual(['J','K','L','M'].map(c=>s.getCell(c+'2').value),[null,null,null,null]);
+ assert.equal(s.getCell('I3').value,'EBh');
+ assert.deepEqual(['J','K','L','M'].map(c=>s.getCell(c+'3').value),['SPI','3-/4-byte Address',6,'Aligned']);
+ assert.equal(s.getCell('I4').value,'20h, 21h');assert.equal(s.getCell('N4').value,null);
+ assert.equal(r._commands,'12h Page Program with 4-Byte Addr（1-1-1）；02h Page Program（1-1-1）；02h Page Program（4-4-4）；C7h/60h Chip Erase');
 });

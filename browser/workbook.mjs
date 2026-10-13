@@ -6,7 +6,16 @@ const SPEC_COLUMNS=COLUMNS.filter(c=>c!=='page');
 const FREQ_FIELDS=[['Opcode','_opcode'],['SPI/QPI','_mode'],['3/4 byte address','_address'],['Dummy','_dummy'],['Starting Address','_start'],['相關指令','_commands'],['對應依據','_command_basis']];
 const AT=SPEC_COLUMNS.indexOf('symbol')+1;
 const BODY_HEADERS=[...SPEC_COLUMNS.slice(0,AT),...FREQ_FIELDS.map(f=>f[0]),...SPEC_COLUMNS.slice(AT)];
-const bodyValues=r=>[...SPEC_COLUMNS.slice(0,AT).map(c=>r[c]),...FREQ_FIELDS.map(f=>r[f[1]]),...SPEC_COLUMNS.slice(AT).map(c=>r[c])];
+function bodyValues(r){
+ const opcodes=[],names=[];
+ for(const entry of String(r._commands||'').split(/[；;]/)){
+  const match=entry.match(/^\s*((?:[0-9a-f]{2}h)(?:\s*[/,]\s*[0-9a-f]{2}h)*)\s*/i);
+  if(match)opcodes.push(...match[1].match(/[0-9a-f]{2}h/gi).map(code=>code.slice(0,-1).toUpperCase()+'h'));
+  const name=(match?entry.slice(match[0].length):entry).trim();if(name)names.push(name);
+ }
+ const display={...r,_opcode:r._opcode||[...new Set(opcodes)].join(', '),_commands:names.join('；')};
+ return [...SPEC_COLUMNS.slice(0,AT).map(c=>r[c]),...FREQ_FIELDS.map(f=>display[f[1]]),...SPEC_COLUMNS.slice(AT).map(c=>r[c])];
+}
 export const COMPARE_HEADERS=['比較結果','變更欄位','變更說明（舊 → 新）',...BODY_HEADERS,'新版頁碼','舊版頁碼'];
 export const COMMAND_SHEET='指令表';
 export const COMMAND_HEADERS=['比較結果','變更說明（舊 → 新）','介面模式','指令名稱','Opcode','設定','Address','Dummy','Data','其他欄位','分組','章節','新版頁碼','舊版頁碼'];
@@ -50,8 +59,8 @@ export async function makeWorkbook(result){
   ['未變更','新舊版內容相同。'],
   ['未比對','匯出時未提供舊版 PDF，只列出新版規格。'],
   ['',''],['【配對規則】','以 產品名稱 + spec type + symbol + parameter + condition 配對新舊版。條件或規格名稱改寫時，可能顯示為一筆「新增」加一筆「移除」，請人工核對。'],
-  ['【頻率條件欄】','Opcode／SPI/QPI／3/4 byte address／Dummy／Starting Address 由頻率矩陣拆出，只有頻率規格有值；condition 仍保留完整條件。'],
-  ['【相關指令】','列出與該規格相關的指令（opcode + 指令名稱 + 介面模式），詳細 Address／Dummy／Data 請查「指令表」。相關指令僅供查詢，不影響「比較結果」。'],
+  ['【頻率條件欄】','Opcode 統一列出指令碼：優先使用頻率矩陣的指令碼，其他規格由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy／Starting Address 仍由頻率矩陣拆出；condition 保留完整條件。'],
+  ['【相關指令】','列出與該規格相關的指令名稱及介面模式；指令碼統一放在 Opcode 欄，詳細 Address／Dummy／Data 請查「指令表」。相關指令僅供查詢，不影響「比較結果」。'],
   ['原文標示 opcode','parameter 原文已寫明 opcode（例如 (20h/21h)），依此 opcode 從指令表帶出指令名稱。'],
   ['名稱規則對應','依明確的名稱規則對應（例如 Page Program Time → Page Program 類指令），非原文直接標示，建議核對。'],
   ['空白','未找到可靠對應，不自動猜測。'],
