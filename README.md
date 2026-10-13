@@ -39,9 +39,10 @@ npm run preview
 
 第一列直接是欄位名稱，資料由第二列開始，沒有合併儲存格。「產品規格比較表」欄位：
 
-`比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | max | typ | min | symbol | Opcode | SPI/QPI | 3/4 byte address | Dummy | Starting Address | parameter | condition | description | unit | spec type | 新版頁碼 | 舊版頁碼`
+`比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | max | typ | min | symbol | Opcode | SPI/QPI | 3/4 byte address | Dummy | Starting Address | 相關指令 | 對應依據 | parameter | condition | description | unit | spec type | 新版頁碼 | 舊版頁碼`
 
 - Opcode／SPI/QPI／3/4 byte address／Dummy／Starting Address 由頻率矩陣拆出，只有頻率規格有值；condition 仍保留完整條件。
+- 相關指令／對應依據：從 PDF 指令表帶出與規格相關的 opcode、指令名稱與介面模式。對應依據為「原文標示 opcode」（parameter 已寫明 opcode）或「名稱規則對應」（明確名稱規則，例如 Page Program Time → Page Program 類指令）；找不到可靠對應則留空，不猜測。相關指令不影響「比較結果」。
 
 - 每個產品、規格、條件獨立一列，數值單位獨立。
 - 空白保持空白，0 仍是數字 0；± 和 VCC 表達式保留文字。
@@ -54,7 +55,8 @@ npm run preview
 Excel 包含：
 
 - **產品規格比較表**：新版規格與新舊版比較結果合併在同一表。「比較結果」以文字標示 變更／新增／移除／待確認／未變更／未比對；「變更說明」列出 `欄位：舊值 → 新值`。移除項目顯示舊版數值與舊版頁碼；待確認項目列出舊版候選值。底色僅為輔助。
-- **說明**：新舊版檔名、匯出時間、各比較結果定義、配對規則與工作表用途。
+- **說明**：新舊版檔名、匯出時間、各比較結果定義、配對規則、相關指令對應依據、指令表來源頁與工作表用途。
+- **指令表**：依表頭（Command／Opcode／Address／Dummy／Data）自動偵測 PDF 指令表，不依固定頁碼；跨頁續表會合併，目錄頁忽略。欄位：比較結果、變更說明、介面模式、指令名稱、Opcode、設定（例如 Set Read Parameters (C0h) = 000）、Address、Dummy、Data、其他欄位、分組、章節、新舊版頁碼。有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。未偵測到時會明確標示。
 - **Review**：無法可靠轉換的原始表格。
 - **Source**：來源頁完整擷取文字，包含原始 Notes。page 為辨識到的印刷頁碼；pdf_page 為實際頁次。
 

@@ -32,6 +32,12 @@ test('private reference PDF without stream async iteration: products, DC/AC, mat
  assert.ok(freq.every(x=>x._opcode==='EBh'&&x._dummy===16&&x._mode&&/byte/i.test(x._address)&&['Aligned','Any'].includes(x._start)));
  assert.equal(r.rows.length,1442);
  assert.ok(compareRows(r.rows,r.rows).every(x=>x._status==='unchanged'));
+ assert.deepEqual(r.command_pages,[56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71]);
+ assert.ok(r.commands.some(c=>c.command==='Page Program'&&c.opcode==='02h'&&c.mode==='1-1-1'));
+ assert.ok(r.commands.some(c=>c.opcode==='ECh'&&c.setting==='Set Read Parameters (C0h) = 000'));
+ assert.ok(!r.review.some(x=>x.section.startsWith('指令表')));
+ const tpp=find('tPP')[0];assert.equal(tpp._command_basis,'名稱規則對應');assert.match(tpp._commands,/02h Page Program/);
+ assert.match(r.rows.find(x=>/4KB Sector Erase Time \(20h\/21h\)/.test(x.parameter))._command_basis,/原文標示/);
 });
 test('unsupported-only page retains original tables and source for export',{skip:!path,timeout:120000},async()=>{
  const r=await parsePdf(pdfjs,await readFile(path),{pages:[181]});

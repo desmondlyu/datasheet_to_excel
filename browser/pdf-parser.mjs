@@ -2,6 +2,7 @@ import {clean,productsFromText} from './spec-core.mjs';
 import {textItems,linesOfText,textIn,rulingLines,findCells,groupTables} from './geometry.mjs';
 import {normalizeTable,normalizeFrequency} from './normalize.mjs';
 import {getPageTextContent} from './pdf-text.mjs';
+import {mayHoldCommands,isCommandTable,parseCommandTable,linkCommands} from './commands.mjs';
 
 export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
  if(data.byteLength>50*1024*1024)throw Error('每份 PDF 上限為 50 MB。');
@@ -65,7 +66,23 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
   }
   if(!rows.length&&!sources.some(s=>s.text.trim()))throw Error('未找到可擷取的文字，請確認 PDF 可選取文字，或指定規格頁的實際頁次。');
   if(!rows.length&&!review.length)review.push({page:selected[0].printed,pdf_page:selected[0].n,table:0,section:selected[0].label,reason:'所選頁面未找到可標準化表格，請核對 Source 工作表。',raw:[['完整原文已保留於 Source。']]});
-  return {rows,review,sources,products:[...new Set(rows.map(r=>r['產品名稱']))].sort()};
+  const commands=[],state={},candidates=pageInfo.filter(p=>mayHoldCommands(p.text));
+  // Command tables are supplementary: a failure here must not block the spec export.
+  try{for(let j=0;j<candidates.length;j++){
+   const p=candidates[j];onProgress({stage:'tables',current:j+1,total:candidates.length});
+   const tables=groupTables(findCells(rulingLines(await p.page.getOperatorList(),pdfjs.OPS,p.viewport)));
+   for(let t=0;t<tables.length;t++){
+    const table=tables[t];if(!isCommandTable(table,p.items))continue;
+    const heading=p.lines.filter(l=>l.y<table.bbox[1]&&l.text.length<100&&(/^[1-9]\d*(?:\.\d+)+\.?\s+[A-Z]/.test(l.text)||/\b(?:Command|Instruction) Set Table\b/i.test(l.text))).pop();
+    if(heading)state.section=heading.text;
+    const section=state.section||p.label;
+    const parsed=parseCommandTable(table,p.items,{page:p.printed,pdfPage:p.n,section},state);
+    commands.push(...parsed.rows);
+    if(parsed.unparsed.length)review.push({page:p.printed,pdf_page:p.n,table:t+1,section:'指令表 / '+section,reason:'指令表部分列未能辨識，已保留原文。',raw:parsed.unparsed});
+   }
+  }}catch(e){commands.length=0;review.push({page:'',pdf_page:'',table:0,section:'指令表',reason:'指令表解析失敗，已略過（規格擷取不受影響）。',raw:[[e.message||String(e)]]});}
+  linkCommands(rows,commands);
+  return {rows,review,sources,commands,command_pages:[...new Set(commands.map(c=>c.pdf_page))],products:[...new Set(rows.map(r=>r['產品名稱']))].sort()};
  }finally{await task.destroy();}
 }
 
