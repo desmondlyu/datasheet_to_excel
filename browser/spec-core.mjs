@@ -46,7 +46,7 @@ export function compareRows(newRows,oldRows){
   const r={...source,_changes:{}};const key=identity(r),prev=older.get(key);
   if(newer.get(key).length>1||(prev?.length||0)>1){r._status='review';r._candidates=(prev||[]).map(p=>({...p}));}
   else if(!prev)r._status='added';
-  else {for(const c of ['max','typ','min','unit','description'])if(String(r[c]??'')!==String(prev[0][c]??''))r._changes[c]={old:prev[0][c]??'',new:r[c]??''};r._status=Object.keys(r._changes).length?'changed':'unchanged';}
+  else {r._old_page=prev[0].page??'';for(const c of ['max','typ','min','unit','description'])if(String(r[c]??'')!==String(prev[0][c]??''))r._changes[c]={old:prev[0][c]??'',new:r[c]??''};r._status=Object.keys(r._changes).length?'changed':'unchanged';}
   return r;
  });
  return [...out,...oldRows.filter(r=>!newer.has(identity(r))).map(r=>({...r,_status:'removed',_changes:{}}))];
