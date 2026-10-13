@@ -4,11 +4,11 @@ import {clean} from './spec-core.mjs';
 const point=(m,x,y)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];
 const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
 export function textItems(content,viewport){return content.items.filter(i=>clean(i.str)).map(i=>{const [x,y]=point(viewport.transform,i.transform[4],i.transform[5]);return {text:i.str,x,y:y-i.height*.35,width:i.width,height:i.height};});}
-export function linesOfText(items){
- const lines=[];for(const t of [...items].sort((a,b)=>a.y-b.y||a.x-b.x)){let l;for(let i=lines.length-1;i>=0;i--){if(Math.abs(lines[i].y-t.y)<3){l=lines[i];break;}}if(!l){l={y:t.y,items:[]};lines.push(l);}l.items.push(t);}
+export function linesOfText(items,lineTolerance=3){
+ const lines=[];for(const t of [...items].sort((a,b)=>a.y-b.y||a.x-b.x)){let l;for(let i=lines.length-1;i>=0;i--){if(Math.abs(lines[i].y-t.y)<lineTolerance){l=lines[i];break;}}if(!l){l={y:t.y,items:[]};lines.push(l);}l.items.push(t);}
  return lines.map(l=>{const sorted=l.items.sort((a,b)=>a.x-b.x);let joined='',prev=null;for(const t of sorted){const gap=prev?t.x-(prev.x+prev.width):0;joined+=(prev&&gap>Math.min(t.height,prev.height)*.18?' ':'')+t.text;prev=t;}return {y:l.y,text:clean(joined)};});
 }
-export function textIn(items,box){return linesOfText(items.filter(t=>t.x+t.width/2>=box[0]-.2&&t.x+t.width/2<=box[2]+.2&&t.y>=box[1]-.2&&t.y<=box[3]+.2)).map(l=>l.text).join(' ');}
+export function textIn(items,box,lineTolerance=3){return linesOfText(items.filter(t=>t.x+t.width/2>=box[0]-.2&&t.x+t.width/2<=box[2]+.2&&t.y>=box[1]-.2&&t.y<=box[3]+.2),lineTolerance).map(l=>l.text).join(' ');}
 export function rulingLines(ops,OPS,viewport){
  let matrix=[1,0,0,1,0,0],stack=[];const edges=[];
  const segment=(a,b)=>{a=point(viewport.transform,...point(matrix,...a));b=point(viewport.transform,...point(matrix,...b));if(Math.abs(a[1]-b[1])<.7&&Math.abs(a[0]-b[0])>2)edges.push({axis:'h',pos:(a[1]+b[1])/2,start:Math.min(a[0],b[0]),end:Math.max(a[0],b[0])});else if(Math.abs(a[0]-b[0])<.7&&Math.abs(a[1]-b[1])>2)edges.push({axis:'v',pos:(a[0]+b[0])/2,start:Math.min(a[1],b[1]),end:Math.max(a[1],b[1])});};

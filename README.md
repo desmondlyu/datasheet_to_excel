@@ -56,7 +56,7 @@ Excel 包含：
 
 - **產品規格比較表**：新版規格與新舊版比較結果合併在同一表。「比較結果」以文字標示 變更／新增／移除／待確認／未變更／未比對；「變更說明」列出 `欄位：舊值 → 新值`。移除項目顯示舊版數值與舊版頁碼；待確認項目列出舊版候選值。底色僅為輔助。
 - **說明**：新舊版檔名、匯出時間、各比較結果定義、配對規則、相關指令對應依據、指令表來源頁與工作表用途。
-- **指令表**：依表頭（Command／Opcode／Address／Dummy／Data）自動偵測 PDF 指令表，不依固定頁碼；跨頁續表會合併，目錄頁忽略。欄位：比較結果、變更說明、介面模式、指令名稱、Opcode、設定（例如 Set Read Parameters (C0h) = 000）、Address、Dummy、Data、其他欄位、分組、章節、新舊版頁碼。有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。未偵測到時會明確標示。
+- **指令表**：依表頭（Command／Opcode／Address／Dummy／Data，或 Data Input Output／Byte 1／Byte 2…）自動偵測 PDF 指令表，不依固定頁碼；跨頁續表會合併，目錄頁忽略。欄位：比較結果、變更說明、介面模式、指令名稱、Opcode、設定（例如 Set Read Parameters (C0h) = 000）、Address、Dummy、Data、其他欄位、分組、章節、新舊版頁碼。有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。未偵測到時會明確標示。逐 Byte 格式會從 Byte 1 讀取 Opcode、從 Number of Clock 列讀取介面模式與時脈數，保留 Address 位元範圍、Dummy 註腳及原始 Byte 內容；指令來源頁與緊接的 Notes 頁保留在 Source。
 - **Review**：無法可靠轉換的原始表格。
 - **Source**：來源頁完整擷取文字，包含原始 Notes。page 為辨識到的印刷頁碼；pdf_page 為實際頁次。
 
@@ -79,7 +79,7 @@ Excel 包含：
 
 ```sh
 npm test
-SPEC_REFERENCE_PDF=/absolute/path/reference.pdf SPEC_SECOND_REFERENCE_PDF=/absolute/path/second-reference.pdf npm test
+SPEC_REFERENCE_PDF=/absolute/path/reference.pdf SPEC_SECOND_REFERENCE_PDF=/absolute/path/second-reference.pdf SPEC_SINGLE_REFERENCE_PDF=/absolute/path/single-reference.pdf npm test
 ```
 
 第一個指令略過未提供私有 PDF 的整合測試。PowerShell 設定環境變數可用 `$env:SPEC_REFERENCE_PDF = "C:\path\reference.pdf"` 後執行 `npm test`。

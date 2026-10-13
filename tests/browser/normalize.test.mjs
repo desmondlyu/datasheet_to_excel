@@ -46,3 +46,9 @@ test('an unresolved product range never creates a synthetic product',()=>{
  const r=normalizeTable({cells,bbox:[0,0,400,50]},items,['W35T32NW','W35T64NW'],{kind:'AC',page:1,pdfPage:1,section:'AC',table:1});
  assert.equal(r.rows.length,0);assert.ok(r.unparsed.length);
 });
+test('superscript note and mixed-baseline suffix retain symbol character order',()=>{
+ const cells=[[0,0,100,20],[100,0,200,20],[200,0,300,20],[0,20,100,45],[100,20,200,45],[200,20,300,45]];
+ const items=[['Parameter',2,10,80,10],['Symbol',102,10,80,10],['Max',202,10,80,10],['Release',2,32,80,10],['10',202,32,20,10],['t',112,32.692,2.635,9.48],['RES',114.64,33.364,13.805,7.56],['1',128.44,32.692,4.74,9.48],['(2)',133.24,30.196,9.397,8.04]].map(([text,x,y,width,height])=>({text,x,y,width,height}));
+ const r=normalizeTable({cells,bbox:[0,0,300,45]},items,['X'],{kind:'AC',page:1,pdfPage:1,section:'AC',table:1});
+ assert.equal(r.rows[0].symbol,'tRES1');assert.match(r.rows[0].description,/Note 2/);
+});

@@ -15,7 +15,8 @@ export function normalizeTable(table,items,defaults,meta){
   for(const c of table.cells)if(c[1]>=y0-1&&c[3]<=y1+1&&c[0]>=(bounds.condition||bounds.min||bounds.symbol)[0]-1){ys.add(Math.max(y0,c[1]));ys.add(Math.min(y1,c[3]));}
   const bands=[...ys].sort((a,b)=>a-b);let active=defaults,emitted=0;
   for(let i=0;i<bands.length-1;i++){
-   const [lo,hi]=bands.slice(i,i+2);if(hi-lo<2)continue;const cy=(lo+hi)/2,v={parameter:param,symbol:text(anchor)};
+   // Symbol subscripts/superscripts can straddle the normal text-line threshold.
+   const [lo,hi]=bands.slice(i,i+2);if(hi-lo<2)continue;const cy=(lo+hi)/2,v={parameter:param,symbol:textIn(items,anchor,5)};
    for(const [key,[x0,x1]] of Object.entries(bounds)){if(['parameter','symbol'].includes(key))continue;v[key]=clean([...new Set(table.cells.filter(c=>c[0]>=x0-1&&c[2]<=x1+1&&c[1]<=cy&&cy<c[3]).sort((a,b)=>a[0]-b[0]).map(text))].join(' '));}
    if(!['min','typ','max'].some(k=>v[k])&&bounds.min&&bounds.max){
     const r=textIn(items,[bounds.min[0],lo,bounds.max[1],hi]).split(/\s+to\s+/);if(r.length===2){v.min=r[0];v.max=r[1];}

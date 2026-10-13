@@ -69,7 +69,7 @@ export async function makeWorkbook(result){
   ['【底色】','底色僅為輔助：變更＝淡黃、新增＝淡綠、移除＝淡灰、待確認＝淡紅。請以「比較結果」欄位為準。'],
   ['',''],['【工作表】',''],
   [COMPARE_SHEET,'新版規格與新舊版比較結果，可用第一列篩選「比較結果」。'],
-  [COMMAND_SHEET,'由 PDF 指令表（依表頭 Command／Opcode／Address／Dummy／Data 自動偵測，不依固定頁碼）擷取；有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。'],
+  [COMMAND_SHEET,'由 PDF 指令表（依表頭 Command／Opcode／Address／Dummy／Data 或 Data Input Output／Byte 1… 自動偵測，不依固定頁碼）擷取；有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。'],
   ['Review','無法可靠轉成固定欄位的原始表格，需人工核對。舊版內容的 section 以「舊版 /」開頭。'],
   ['Source','新舊版來源頁擷取文字與原始 Notes（舊版 section 以「舊版 /」開頭）。page 為印刷頁碼，pdf_page 為 PDF 實際頁次。']
  ].forEach(row=>info.addRow(row));
