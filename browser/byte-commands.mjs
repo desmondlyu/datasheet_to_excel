@@ -1,5 +1,5 @@
 // Instruction tables that describe the transfer byte by byte instead of named phases.
-import {clean} from './spec-core.mjs';
+import {clean,stripNumericNotes} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 
 const isLabel=s=>/^Data\s+Input\s*\/?\s*Output$/i.test(s);
@@ -30,7 +30,7 @@ export function parseByteCommandTable(table,items,meta){
   if(!name)continue;
   const opcodeColumn=columns.find(c=>/^Byte\s+1$/i.test(c.label));
   const opcodeCell=opcodeColumn&&band.find(c=>c[0]>=opcodeColumn.x0-1&&c[2]<=opcodeColumn.x1+1);
-  const opcode=opcodeCell?text(opcodeCell):'';
+  const opcode=opcodeCell?stripNumericNotes(text(opcodeCell)):'';
   if(!/^[0-9A-F]{2}h(?:\s*[/,]\s*[0-9A-F]{2}h)*$/i.test(opcode)){
    unparsed.push([band.map(text).join(' '),'指令表列未辨識到 opcode，請核對原文。']);continue;
   }
@@ -45,7 +45,7 @@ export function parseByteCommandTable(table,items,meta){
    else data.push(`${labels}: ${value}`);
   }
   rows.push({command:clean(name.replace(/\(\d+(?:\s*,\s*\d+)*\)/g,'')),opcode,mode,
-   address:address.join(', '),dummy:dummy.join('; '),data:data.join('; '),
+   address:address.join(', '),dummy:stripNumericNotes(dummy.join('; ')),data:data.join('; '),
    extra:`${name}; ${raw.join('; ')}`,setting:'',group,section:meta.section,page:meta.page,pdf_page:meta.pdfPage});
  }
  return {rows,unparsed};

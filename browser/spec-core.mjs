@@ -1,5 +1,6 @@
 export const COLUMNS=['產品名稱','max','typ','min','symbol','parameter','condition','description','unit','spec type','page'];
 export const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
+export const stripNumericNotes=v=>typeof v==='string'?clean(v.replace(/\(\s*\d+(?:\s*[,，]\s*\d+)*\s*\)/g,'')):v;
 export function numericValue(v){const s=clean(v).replace(/^([+−–-])\s+(?=\d)/,'$1');return /^[+−–-]?\d[\d,]*(?:\.\d+)?$/.test(s)?Number(s.replace(/,/g,'').replace(/[−–]/g,'-')):s;}
 export function parsePageInput(s){if(!s?.trim())return [];const p=s.split(',').map(x=>x.trim());if(p.some(x=>!/^\d+$/.test(x)||+x<1))throw Error('頁碼請使用正整數，以逗號分隔，例如 169,170,171。');return [...new Set(p.map(Number))];}
 // Model names are evidence from the document, not a built-in product catalogue.
@@ -49,7 +50,13 @@ export function compareRows(newRows,oldRows){
   const r={...source,_changes:{}};const key=identity(r),prev=older.get(key);
   if(newer.get(key).length>1||(prev?.length||0)>1){r._status='review';r._candidates=(prev||[]).map(p=>({...p}));}
   else if(!prev)r._status='added';
-  else {r._old_page=prev[0].page??'';for(const c of ['max','typ','min','unit','description'])if(String(r[c]??'')!==String(prev[0][c]??''))r._changes[c]={old:prev[0][c]??'',new:r[c]??''};r._status=Object.keys(r._changes).length?'changed':'unchanged';}
+  else {
+   r._old_page=prev[0].page??'';
+   const fields=['max','typ','min','unit','description'].map(c=>[c,c]);
+   if(r['spec type']==='Command')fields.push(['3/4 byte address','_address'],['Dummy','_dummy']);
+   for(const [label,c] of fields)if(String(r[c]??'')!==String(prev[0][c]??''))r._changes[label]={old:prev[0][c]??'',new:r[c]??''};
+   r._status=Object.keys(r._changes).length?'changed':'unchanged';
+  }
   return r;
  });
  return [...out,...oldRows.filter(r=>!newer.has(identity(r))).map(r=>({...r,_status:'removed',_changes:{}}))];

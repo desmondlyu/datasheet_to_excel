@@ -30,11 +30,13 @@ test('private reference PDF without stream async iteration: products, DC/AC, mat
  assert.deepEqual(freq.map(x=>x.max),[200,133]);
  assert.match(freq[0].condition,/DS bit enabled/);
  assert.ok(freq.every(x=>x._opcode==='EBh'&&x._dummy===16&&x._mode&&/byte/i.test(x._address)&&['Aligned','Any'].includes(x._start)));
- assert.equal(r.rows.length,1442);
+ const specs=r.rows.filter(x=>x['spec type']!=='Command');
+ assert.equal(specs.length,1442);
+ assert.equal(r.rows.filter(x=>x['spec type']==='Command').length,r.commands.length*r.products.length);
  const ordinary=r.rows.filter(x=>x.symbol==='fR'&&/^Starting Address: (Aligned|Any)$/.test(x.condition));
  assert.equal(ordinary.length,14);
  assert.ok(ordinary.every(x=>x._start===x.condition.split(': ')[1]));
- assert.ok(compareRows(r.rows,r.rows).every(x=>x._status==='unchanged'));
+ assert.ok(compareRows(specs,specs).every(x=>x._status==='unchanged'));
  assert.deepEqual(r.command_pages,[56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71]);
  assert.ok(r.commands.some(c=>c.command==='Page Program'&&c.opcode==='02h'&&c.mode==='1-1-1'));
  assert.ok(r.commands.some(c=>c.opcode==='ECh'&&c.setting==='Set Read Parameters (C0h) = 000'));
@@ -44,5 +46,6 @@ test('private reference PDF without stream async iteration: products, DC/AC, mat
 });
 test('unsupported-only page retains original tables and source for export',{skip:!path,timeout:120000},async()=>{
  const r=await parsePdf(pdfjs,await readFile(path),{pages:[181]});
- assert.equal(r.rows.length,0);assert.ok(r.review.length>0);assert.ok(r.sources[0].text.includes('Alternative'));
+ assert.equal(r.rows.filter(x=>x['spec type']!=='Command').length,0);assert.ok(r.review.length>0);assert.ok(r.sources[0].text.includes('Alternative'));
+ assert.ok(r.rows.some(x=>x['spec type']==='Command'));
 });

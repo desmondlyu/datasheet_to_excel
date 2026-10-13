@@ -39,10 +39,13 @@ npm run preview
 
 第一列直接是欄位名稱，資料由第二列開始，沒有合併儲存格。「產品規格比較表」欄位：
 
-`比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | max | typ | min | symbol | Opcode | SPI/QPI | 3/4 byte address | Dummy | Starting Address | 相關指令 | 對應依據 | parameter | condition | description | unit | spec type | 新版頁碼 | 舊版頁碼`
+`比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | Opcode | unit | max | typ | min | symbol | SPI/QPI | 3/4 byte address | Dummy | Starting Address | spec type | 相關指令 | parameter | condition | description | 新版頁碼 | 舊版頁碼`
 
-- Opcode 優先使用頻率矩陣指令碼，其他規格則由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy 由頻率矩陣拆出；Starting Address 也會從一般規格的 condition 擷取 Aligned／Any，放入 M 欄。condition 仍保留完整條件。
-- 相關指令／對應依據：從 PDF 指令表帶出與規格相關的指令名稱與介面模式，指令碼統一放在 Opcode 欄。對應依據為「原文標示 opcode」（parameter 已寫明 opcode）或「名稱規則對應」（明確名稱規則，例如 Page Program Time → Page Program 類指令）；找不到可靠對應則留空，不猜測。相關指令不影響「比較結果」。
+- 欄位順序依 `title_sequence.xlsx`，不再匯出「對應依據」；瀏覽器預覽與 Excel 使用相同欄位及內容。
+- Opcode 優先使用頻率矩陣指令碼，其他規格則由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy 由頻率矩陣或指令表帶出；Command 列保留原始 IO 模式與位址位元範圍，不將混合格式擅自換算。Starting Address 也會從一般規格的 condition 擷取 Aligned／Any，放入 N 欄。condition 仍保留完整條件。
+- 相關指令：依原文 opcode 或明確名稱規則（例如 Page Program Time → Page Program 類指令）帶出指令名稱與介面模式；找不到可靠對應則留空，不猜測。指令碼統一放在 Opcode 欄，相關指令不影響原 AC/DC 規格的「比較結果」。
+- 完整 User mode 指令另外以 `spec type = Command` 列入比較表，依產品／IO 模式／設定分列，不再受 AC/DC 對應規則限制。Factory-only 章節不加入，User mode 可執行的 Enter Factory Mode 指令仍保留。symbol／max／typ／min／unit 保持空白，Data 與其他原始欄位放在 description；產品限定請核對 Source 原始 Notes。指定頁碼只限制電性表格，指令表仍由完整 PDF 自動偵測。
+- 比較表與指令表的 Opcode／Dummy 移除 `(2)`、`(11,14)` 等數字註腳，保留 `(Def)` 等有效內容；condition、Source 與原始 Byte 證據仍保留原文。
 
 - 每個產品、規格、條件獨立一列，數值單位獨立。
 - 空白保持空白，0 仍是數字 0；± 和 VCC 表達式保留文字。
@@ -54,9 +57,9 @@ npm run preview
 
 Excel 包含：
 
-- **產品規格比較表**：新版規格與新舊版比較結果合併在同一表。「比較結果」以文字標示 變更／新增／移除／待確認／未變更／未比對；「變更說明」列出 `欄位：舊值 → 新值`。移除項目顯示舊版數值與舊版頁碼；待確認項目列出舊版候選值。底色僅為輔助。
-- **說明**：新舊版檔名、匯出時間、各比較結果定義、配對規則、相關指令對應依據、指令表來源頁與工作表用途。
-- **指令表**：依表頭（Command／Opcode／Address／Dummy／Data，或 Data Input Output／Byte 1／Byte 2…）自動偵測 PDF 指令表，不依固定頁碼；跨頁續表會合併，目錄頁忽略。欄位：比較結果、變更說明、介面模式、指令名稱、Opcode、設定（例如 Set Read Parameters (C0h) = 000）、Address、Dummy、Data、其他欄位、分組、章節、新舊版頁碼。有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。未偵測到時會明確標示。逐 Byte 格式會從 Byte 1 讀取 Opcode、從 Number of Clock 列讀取介面模式與時脈數，保留 Address 位元範圍、Dummy 註腳及原始 Byte 內容；指令來源頁與緊接的 Notes 頁保留在 Source。
+- **產品規格比較表**：新版 AC/DC 等規格、完整 User mode Command 與新舊版比較結果合併在同一表。「比較結果」以文字標示 變更／新增／移除／待確認／未變更／未比對；「變更說明」列出 `欄位：舊值 → 新值`。Command 列也比較 Address／Dummy。移除項目顯示舊版內容與舊版頁碼；待確認項目列出舊版候選值。底色僅為輔助。
+- **說明**：新舊版檔名、匯出時間、各比較結果定義、配對規則、Command 列與數字註腳處理、指令表來源頁與工作表用途。
+- **指令表**：依表頭（Command／Opcode／Address／Dummy／Data，或 Data Input Output／Byte 1／Byte 2…）自動偵測 PDF 指令表，不依固定頁碼；跨頁續表會合併，目錄頁忽略。欄位：比較結果、變更說明、介面模式、指令名稱、Opcode、設定（例如 Set Read Parameters (C0h) = 000）、Address、Dummy、Data、其他欄位、分組、章節、新舊版頁碼。有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。未偵測到時會明確標示。逐 Byte 格式會從 Byte 1 讀取 Opcode、從 Number of Clock 列讀取介面模式與時脈數，保留 Address 位元範圍及原始 Byte 內容；Opcode／Dummy 欄的數字註腳已移除，原始指令來源頁與緊接的 Notes 頁保留在 Source。
 - **Review**：無法可靠轉換的原始表格。
 - **Source**：來源頁完整擷取文字，包含原始 Notes。page 為辨識到的印刷頁碼；pdf_page 為實際頁次。
 
@@ -80,9 +83,11 @@ Excel 包含：
 ```sh
 npm test
 SPEC_REFERENCE_PDF=/absolute/path/reference.pdf SPEC_SECOND_REFERENCE_PDF=/absolute/path/second-reference.pdf SPEC_SINGLE_REFERENCE_PDF=/absolute/path/single-reference.pdf npm test
+SPEC_COMMAND_REFERENCE_DIR=/absolute/path/pdf-and-template-directory npm test
 ```
 
 第一個指令略過未提供私有 PDF 的整合測試。PowerShell 設定環境變數可用 `$env:SPEC_REFERENCE_PDF = "C:\path\reference.pdf"` 後執行 `npm test`。
+`SPEC_COMMAND_REFERENCE_DIR` 指向四份參考 PDF 與 `title_sequence.xlsx` 所在目錄，核對完整指令涵蓋、模板欄序、數字註腳清除及新舊版預覽／Excel 一致性；私有 PDF 與模板不需提交至 repo。
 
 `browser/` 包含座標與表格線重建、標準化、比對、匯出及介面。`index.html` 是靜態網站入口。
 

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mayHoldCommands,isCommandTable,parseCommandTable,linkCommands,compareCommands} from '../../browser/commands.mjs';
+import * as commands from '../../browser/commands.mjs';
+import {compareRows} from '../../browser/spec-core.mjs';
 // Synthetic table: cells are [x0,y0,x1,y1]; one text item centred in each cell.
 function table(rows){
  const cells=[],items=[];
@@ -49,4 +51,44 @@ test('command comparison reports changed, added and removed entries',()=>{
  const out=compareCommands([c({dummy:'8'}),c({command:'Read',opcode:'03h'})],[c({page:50}),c({command:'Erase',opcode:'20h'})]);
  assert.deepEqual(out.map(x=>x._status),['changed','added','removed']);
  assert.deepEqual(out[0]._changes,{dummy:{old:'--',new:'8'}});assert.equal(out[0]._old_page,50);
+});
+test('all user commands become per-product specification rows without fabricated limits',()=>{
+ assert.equal(typeof commands.commandSpecRows,'function');
+ const c={command:'Write Enable',opcode:'06h',mode:'1-1-1',address:'--',dummy:'--',data:'--',extra:'Any Address (MHz): 133',setting:'',group:'',section:'SPI Commands',page:56,pdf_page:58};
+ const input=[c,{...c,command:'Read Buffer',opcode:'83h(14)',dummy:'16(3)',setting:'P = 000'},{...c,mode:'4-4-4'}];
+ const rows=commands.commandSpecRows(input,['X','Y']);
+ assert.equal(rows.length,6);
+ assert.deepEqual(rows.filter(r=>r['產品名稱']==='X').map(r=>r._opcode),['06h','83h','06h']);
+ assert.ok(rows.every(r=>r['spec type']==='Command'&&r.symbol===''&&r.max===''&&r.typ===''&&r.min===''&&r.unit===''));
+ assert.equal(rows[0]._mode,'1-1-1');assert.equal(rows[0]._address,'--');
+ assert.equal(rows[0].page,56);assert.equal(rows[0]._pdf_page,58);assert.equal(rows[0]._section,'SPI Commands');
+ assert.equal(rows[2]._dummy,16);assert.match(rows[2].condition,/P = 000/);
+ assert.match(rows[0].description,/Any Address \(MHz\): 133/);
+ assert.equal(input[1].opcode,'83h(14)');assert.equal(input[1].dummy,'16(3)');
+});
+test('factory-only tables are excluded but user commands that enter factory mode are included',()=>{
+ assert.equal(typeof commands.commandSpecRows,'function');
+ const c={command:'Enter Factory Mode OP-1',opcode:'51h',mode:'1-1-1',section:'SPI Commands',group:''};
+ const rows=commands.commandSpecRows([c,{...c,section:'Factory Mode Commands'},{...c,group:'Factory-only commands'}],['X']);
+ assert.equal(rows.length,1);assert.equal(rows[0].parameter,c.command);
+});
+test('command address and dummy changes retain pairing and removed-command page semantics',()=>{
+ assert.equal(typeof commands.commandSpecRows,'function');
+ const c={command:'Read',opcode:'03h',mode:'1-1-1',address:'A23-A0',dummy:'8',data:'D7-D0',setting:'',page:56};
+ const newer=commands.commandSpecRows([{...c,address:'A31-A0',dummy:'16'}],['X']);
+ const older=commands.commandSpecRows([c,{...c,command:'Write Enable',opcode:'06h'}],['X']);
+ const rows=compareRows(newer,older);
+ assert.deepEqual(rows.map(r=>r._status),['changed','removed']);
+ assert.deepEqual(rows[0]._changes,{'3/4 byte address':{old:'A23-A0',new:'A31-A0'},Dummy:{old:8,new:16}});
+ assert.equal(rows[0]._old_page,56);
+});
+test('named command tables remove numeric opcode and dummy notes without removing defaults',()=>{
+ const annotated=W25.map(c=>[...c]);
+ annotated.find(c=>c[4]==='02h')[4]='02h(14)';
+ annotated.find(c=>c[0]===200&&c[1]===30)[4]='4(3)';
+ annotated.find(c=>c[0]===200&&c[1]===40)[4]='6 (Def)';
+ const {table:t,items}=table(annotated);
+ const {rows,unparsed}=parseCommandTable(t,items,{page:1,pdfPage:1,section:'SPI'},{});
+ assert.deepEqual(unparsed,[]);assert.equal(rows[0].opcode,'02h');
+ assert.equal(rows[1].dummy,'4');assert.equal(rows[2].dummy,'6 (Def)');
 });

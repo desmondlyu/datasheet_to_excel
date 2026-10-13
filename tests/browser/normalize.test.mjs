@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeTable} from '../../browser/normalize.mjs';
+import {normalizeTable,normalizeFrequency} from '../../browser/normalize.mjs';
 test('symbol-less body row is retained for review beside a parsed row',()=>{
  const cells=[],items=[];const content=[['Parameter','Symbol','Max'],['Supply current','ICC','10'],['Storage temperature','','125']];
  for(let y=0;y<3;y++)for(let x=0;x<3;x++){cells.push([x*100,y*25,(x+1)*100,(y+1)*25]);if(content[y][x])items.push({text:content[y][x],x:x*100+5,y:y*25+12,width:80,height:10});}
@@ -51,4 +51,17 @@ test('superscript note and mixed-baseline suffix retain symbol character order',
  const items=[['Parameter',2,10,80,10],['Symbol',102,10,80,10],['Max',202,10,80,10],['Release',2,32,80,10],['10',202,32,20,10],['t',112,32.692,2.635,9.48],['RES',114.64,33.364,13.805,7.56],['1',128.44,32.692,4.74,9.48],['(2)',133.24,30.196,9.397,8.04]].map(([text,x,y,width,height])=>({text,x,y,width,height}));
  const r=normalizeTable({cells,bbox:[0,0,300,45]},items,['X'],{kind:'AC',page:1,pdfPage:1,section:'AC',table:1});
  assert.equal(r.rows[0].symbol,'tRES1');assert.match(r.rows[0].description,/Note 2/);
+});
+test('frequency matrix note references do not remain in opcode or numeric dummy fields',()=>{
+ const content=[
+  [0,0,100,10,'Address Mode'],[100,0,300,10,'Fast Read Quad I/O'],
+  [0,10,100,20,'3-/4-byte Address'],[100,10,300,20,'EBh(2)'],
+  [0,20,100,30,'Dummy'],[100,20,200,30,'Aligned'],[200,20,300,30,'Any'],
+  [0,30,100,40,'16(3)'],[100,30,200,40,'133'],[200,30,300,40,'100'],
+ ];
+ const cells=content.map(c=>c.slice(0,4)),items=content.map(([x0,y0,x1,y1,text])=>({text,x:x0+2,y:(y0+y1)/2,width:x1-x0-4,height:6}));
+ const rows=normalizeFrequency({cells,bbox:[0,0,300,40]},items,['X'],{kind:'AC',page:1,pdfPage:1,section:'SPI',table:1});
+ assert.equal(rows.length,2);
+ assert.ok(rows.every(r=>r._opcode==='EBh'&&r._dummy===16));
+ assert.ok(rows.every(r=>r.condition.includes('opcode=EBh(2); Dummy=16(3)')));
 });

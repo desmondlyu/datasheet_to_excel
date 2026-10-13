@@ -1,5 +1,5 @@
 // Command (instruction set) tables are located by header signature, never by fixed page numbers.
-import {clean} from './spec-core.mjs';
+import {clean,makeRow,numericValue,stripNumericNotes} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 import {isByteCommandTable,parseByteCommandTable} from './byte-commands.mjs';
 
@@ -46,7 +46,7 @@ export function parseCommandTable(table,items,meta,state={}){
   const cy=(lo+hi)/2,hits=columns.map(col=>body.filter(c=>c[0]<col.x1-1&&c[2]>col.x0+1&&c[1]<=cy&&cy<c[3]).sort((a,b)=>a[0]-b[0]));
   const v=hits.map(cs=>clean(cs.map(text).join(' ')));const distinct=new Set(hits.flat().filter(c=>text(c)));
   const get=k=>columns.map((c,j)=>c.key===k?v[j]:null).filter(x=>x!==null);
-  const command=get('command')[0]||'',opcode=get('opcode')[0]||'';
+  const command=get('command')[0]||'',opcode=stripNumericNotes(get('opcode')[0]||'');
   const rowText=clean([...distinct].map(text).join(' '));
   if(!rowText||headerLabels.has(command.toLowerCase()))continue;
   const io=command.match(/Number of Clock[\s(]*(?:IO\s*)?([0-9d]+(?:-[0-9d]+){2})/i);
@@ -54,7 +54,7 @@ export function parseCommandTable(table,items,meta,state={}){
   if(distinct.size===1&&!OPCODE_RE.test(rowText)){state.group=rowText;continue;}
   const modes=columns.map((c,j)=>c.key==='mode'&&v[j]&&v[j]!=='-'?`${v[j]}（${c.label.replace(/^.*?\b(SDR|ODDR|DDR|STR|DTR)\b.*$/i,'$1')}）`:'').filter(Boolean);
   const extra=columns.map((c,j)=>c.key==='extra'&&v[j]&&!/^MHz$/i.test(v[j])?`${c.label}${state.units?.[c.label]?` (${state.units[c.label]})`:''}: ${v[j]}`:'').filter(Boolean).join('; ');
-  const record={command,opcode,mode:modes.join('；')||state.io||'',address:get('address').join(' '),dummy:get('dummy').join(' '),data:get('data').join(' '),extra,setting:'',group:state.group||'',section:meta.section,page:meta.page,pdf_page:meta.pdfPage};
+  const record={command,opcode,mode:modes.join('；')||state.io||'',address:get('address').join(' '),dummy:stripNumericNotes(get('dummy').join(' ')),data:get('data').join(' '),extra,setting:'',group:state.group||'',section:meta.section,page:meta.page,pdf_page:meta.pdfPage};
   const variant=command.match(/^(.*?)\s+([01](?:\s*[01]){1,3})$/);
   if(variant&&state.last&&(opcode===state.last.opcode||/^[01\s]+$/.test(opcode))){rows.push({...record,command:state.last.command,opcode:state.last.opcode,setting:`${variant[1].replace(/\s*M7.*$/,'')} = ${variant[2].replace(/\s+/g,'')}`});continue;}
   const bits=opcode.replace(/\s+/g,'');
@@ -63,6 +63,23 @@ export function parseCommandTable(table,items,meta,state={}){
   unparsed.push([rowText,'指令表列未辨識到 opcode，請核對原文。']);
  }
  return {rows,unparsed};
+}
+
+export function commandSpecRows(commands,products){
+ const rows=[];
+ for(const c of commands){
+  const scope=[c.section,c.group].filter(Boolean).join(' ');
+  if(/\bFactory[\s-]+(?:Mode|Only)\b/i.test(scope)&&!/\bUser[\s-]+Mode\b/i.test(scope))continue;
+  const opcode=stripNumericNotes(c.opcode),dummy=numericValue(stripNumericNotes(c.dummy));
+  const condition=[`opcode=${opcode}`,c.mode?`IO=${c.mode}`:'',c.setting].filter(Boolean).join('; ');
+  for(const product of products){
+   const r=makeRow(product,{parameter:c.command,condition},{kind:'Command',page:c.page,pdfPage:c.pdf_page,section:clean(c.section)});
+   Object.assign(r,{_opcode:opcode,_mode:c.mode,_address:c.address,_dummy:dummy,_commands:`${opcode} ${c.command}`});
+   r.description=[c.data?`Data: ${c.data}`:'',c.extra].filter(Boolean).join('; ');
+   rows.push(r);
+  }
+ }
+ return rows;
 }
 
 // Explicit rules: parameter wording -> command wording. Ordered; first match wins.

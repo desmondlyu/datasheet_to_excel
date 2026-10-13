@@ -2,7 +2,7 @@ import {clean,productsFromText} from './spec-core.mjs';
 import {textItems,linesOfText,textIn,rulingLines,findCells,groupTables} from './geometry.mjs';
 import {normalizeTable,normalizeFrequency} from './normalize.mjs';
 import {getPageTextContent} from './pdf-text.mjs';
-import {mayHoldCommands,isCommandTable,parseCommandTable,linkCommands} from './commands.mjs';
+import {mayHoldCommands,isCommandTable,parseCommandTable,linkCommands,commandSpecRows} from './commands.mjs';
 
 export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
  if(data.byteLength>50*1024*1024)throw Error('每份 PDF 上限為 50 MB。');
@@ -89,6 +89,7 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
    }
   }
   linkCommands(rows,commands);
+  rows.push(...commandSpecRows(commands,defaults));
   return {rows,review,sources,commands,command_pages:[...new Set(commands.map(c=>c.pdf_page))],products:[...new Set(rows.map(r=>r['產品名稱']))].sort()};
  }finally{await task.destroy();}
 }

@@ -23,8 +23,14 @@ test('byte-layout commands retain opcode, address, clock counts and per-group mo
  assert.equal(r.rows[0].dummy,'');
  assert.match(r.rows[0].data,/D7-D0\(3\)/);
  assert.equal(r.rows[1].dummy,'Byte 5: 8 clocks (Dummy)');
- assert.equal(r.rows[2].dummy,'Byte 5: 8 clocks (Dummy(11,14))');
+ assert.equal(r.rows[2].dummy,'Byte 5: 8 clocks (Dummy)');
  assert.match(r.rows[2].extra,/DTR Fast Read Quad I\/O\(14\)/);
+});
+test('byte-layout opcodes accept numeric footnotes while preserving raw byte evidence',()=>{
+ const {table,items}=grid([header,['Number of Clock(1-1-1)','8','8','8','8','8','8'],['Read','03h(2)','A23-A16','A15-A8','A7-A0','Dummy(3)','D7-D0']]);
+ const r=parseCommandTable(table,items,meta);
+ assert.deepEqual(r.unparsed,[]);assert.equal(r.rows[0].opcode,'03h');assert.equal(r.rows[0].dummy,'Byte 5: 8 clocks (Dummy)');
+ assert.match(r.rows[0].extra,/Dummy\(3\)/);
 });
 test('byte-layout detection requires instruction label and byte 1, malformed opcodes remain reviewable',()=>{
  const bad=grid([['Description','Byte 1','Byte 2'],['Noise','02h','100']]);
