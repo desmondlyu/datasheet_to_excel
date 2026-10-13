@@ -29,6 +29,7 @@ test('private reference PDF without stream async iteration: products, DC/AC, mat
  const freq=r.rows.filter(x=>x['產品名稱']==='W25Q32RW'&&x.page===172&&x.condition.includes('opcode=EBh;')&&x.condition.includes('Dummy=16;'));
  assert.deepEqual(freq.map(x=>x.max),[200,133]);
  assert.match(freq[0].condition,/DS bit enabled/);
+ assert.ok(freq.every(x=>x._opcode==='EBh'&&x._dummy===16&&x._mode&&/byte/i.test(x._address)&&['Aligned','Any'].includes(x._start)));
  assert.equal(r.rows.length,1442);
  assert.ok(compareRows(r.rows,r.rows).every(x=>x._status==='unchanged'));
 });

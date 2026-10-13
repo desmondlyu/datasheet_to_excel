@@ -12,7 +12,7 @@ test('XLSX uses comparison headers, numeric limits, blank cells and inert formul
  assert.deepEqual(w.worksheets.map(x=>x.name),[COMPARE_SHEET,'說明','Review','Source']);
  assert.deepEqual(s.getRow(1).values.slice(1),COMPARE_HEADERS);
  assert.equal(s.getCell('A2').value,'未比對');assert.equal(s.getCell('E2').value,50);assert.equal(s.getCell('F2').value,0);assert.equal(s.getCell('G2').value,null);
- assert.equal(s.getCell('K2').value,'=1+1');assert.equal(s.getCell('K2').formula,undefined);assert.equal(s.getCell('N2').value,12);assert.equal(s.getCell('O2').value,null);
+ assert.equal(s.getCell('P2').value,'=1+1');assert.equal(s.getCell('P2').formula,undefined);assert.equal(s.getCell('S2').value,12);assert.equal(s.getCell('T2').value,null);
 });
 test('changed, added and removed rows are described in text with old and new pages',async()=>{
  const row=kw=>({...blank(),產品名稱:'X',symbol:'ICC1',max:50,unit:'mA',...kw});
@@ -21,19 +21,28 @@ test('changed, added and removed rows are described in text with old and new pag
  assert.equal(s.rowCount,4);
  assert.deepEqual([2,3,4].map(i=>s.getCell('A'+i).value),['變更','新增','移除']);
  assert.equal(s.getCell('B2').value,'max');assert.equal(s.getCell('C2').value,'max：50 → 60');
- assert.equal(s.getCell('N2').value,20);assert.equal(s.getCell('O2').value,18);
- assert.equal(s.getCell('N3').value,20+1);assert.equal(s.getCell('O3').value,null);
- assert.match(s.getCell('C4').value,/新版已移除/);assert.equal(s.getCell('N4').value,null);assert.equal(s.getCell('O4').value,19);
+ assert.equal(s.getCell('S2').value,20);assert.equal(s.getCell('T2').value,18);
+ assert.equal(s.getCell('S3').value,20+1);assert.equal(s.getCell('T3').value,null);
+ assert.match(s.getCell('C4').value,/新版已移除/);assert.equal(s.getCell('S4').value,null);assert.equal(s.getCell('T4').value,19);
 });
 test('ambiguous old candidates are listed in the change description',async()=>{
  const s=(await load({rows:[{產品名稱:'X',max:30,page:5,_status:'review',_candidates:[{產品名稱:'X',max:10,page:3},{產品名稱:'X',max:20,page:4}]}]})).getWorksheet(COMPARE_SHEET);
  assert.equal(s.rowCount,2);assert.equal(s.getCell('A2').value,'待確認');
  assert.match(s.getCell('C2').value,/舊版候選 1：max 10.*舊版頁 3/);assert.match(s.getCell('C2').value,/舊版候選 2：max 20.*舊版頁 4/);
- assert.equal(s.getCell('O2').value,'3, 4');
+ assert.equal(s.getCell('T2').value,'3, 4');
 });
 test('info sheet records file names and status definitions',async()=>{
  const s=(await load({rows:[],filename:'new.pdf',old_filename:'old.pdf',compared:true})).getWorksheet('說明');
  const text=[];s.eachRow(r=>text.push(r.values.slice(1).join('|')));const all=text.join('\n');
  assert.match(all,/新版 PDF\|new\.pdf/);assert.match(all,/舊版 PDF\|old\.pdf/);
  for(const label of ['變更','新增','移除','待確認','未變更','未比對'])assert.match(all,new RegExp('^'+label+'\\|','m'));
+});
+test('frequency matrix fields sit between symbol and parameter while condition stays intact',async()=>{
+ const condition='SPI; 3-/4-byte Address; opcode=EBh; Dummy=6; Starting Address: Aligned';
+ const r={...blank(),產品名稱:'X',parameter:'Fast Read Quad I/O maximum clock frequency',condition,max:133,unit:'MHz',_status:'uncompared',_opcode:'EBh',_mode:'SPI',_address:'3-/4-byte Address',_dummy:6,_start:'Aligned'};
+ const s=(await load({rows:[r,{...blank(),產品名稱:'X',symbol:'ICC1',_status:'uncompared'}]})).getWorksheet(COMPARE_SHEET);
+ assert.deepEqual(s.getRow(1).values.slice(8,15),['symbol','Opcode','SPI/QPI','3/4 byte address','Dummy','Starting Address','parameter']);
+ assert.deepEqual(s.getRow(2).values.slice(9,14),['EBh','SPI','3-/4-byte Address',6,'Aligned']);
+ assert.equal(s.getCell('O2').value,condition);
+ assert.deepEqual([9,10,11,12,13].map(c=>s.getRow(3).getCell(c).value),[null,null,null,null,null]);
 });

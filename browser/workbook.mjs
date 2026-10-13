@@ -3,7 +3,11 @@ import {COLUMNS} from './spec-core.mjs';
 export const COMPARE_SHEET='產品規格比較表';
 export const STATUS_LABELS={changed:'變更',added:'新增',removed:'移除',review:'待確認',unchanged:'未變更',uncompared:'未比對'};
 const SPEC_COLUMNS=COLUMNS.filter(c=>c!=='page');
-export const COMPARE_HEADERS=['比較結果','變更欄位','變更說明（舊 → 新）',...SPEC_COLUMNS,'新版頁碼','舊版頁碼'];
+const FREQ_FIELDS=[['Opcode','_opcode'],['SPI/QPI','_mode'],['3/4 byte address','_address'],['Dummy','_dummy'],['Starting Address','_start']];
+const AT=SPEC_COLUMNS.indexOf('symbol')+1;
+const BODY_HEADERS=[...SPEC_COLUMNS.slice(0,AT),...FREQ_FIELDS.map(f=>f[0]),...SPEC_COLUMNS.slice(AT)];
+const bodyValues=r=>[...SPEC_COLUMNS.slice(0,AT).map(c=>r[c]),...FREQ_FIELDS.map(f=>r[f[1]]),...SPEC_COLUMNS.slice(AT).map(c=>r[c])];
+export const COMPARE_HEADERS=['比較結果','變更欄位','變更說明（舊 → 新）',...BODY_HEADERS,'新版頁碼','舊版頁碼'];
 const FILLS={added:'FFE2F1E7',changed:'FFFFE9BE',review:'FFFFDDDA',removed:'FFE7E9EC'};
 const shown=v=>v===''||v===undefined||v===null?'空白':String(v);
 function explain(r){
@@ -20,7 +24,7 @@ function explain(r){
 function compareRow(r){
  const removed=r._status==='removed';
  const oldPage=removed?r.page:r._status==='review'?[...new Set((r._candidates||[]).map(p=>p.page).filter(p=>p!==''&&p!==undefined))].join(', '):r._old_page;
- return [STATUS_LABELS[r._status]||r._status||'',r._status==='changed'?Object.keys(r._changes||{}).join(', '):'',explain(r),...SPEC_COLUMNS.map(c=>r[c]),removed?'':r.page,oldPage];
+ return [STATUS_LABELS[r._status]||r._status||'',r._status==='changed'?Object.keys(r._changes||{}).join(', '):'',explain(r),...bodyValues(r),removed?'':r.page,oldPage];
 }
 export async function makeWorkbook(result){
  const book=new ExcelJS.Workbook();book.creator='Datasheet 規格工作台';
@@ -37,6 +41,7 @@ export async function makeWorkbook(result){
   ['未變更','新舊版內容相同。'],
   ['未比對','匯出時未提供舊版 PDF，只列出新版規格。'],
   ['',''],['【配對規則】','以 產品名稱 + spec type + symbol + parameter + condition 配對新舊版。條件或規格名稱改寫時，可能顯示為一筆「新增」加一筆「移除」，請人工核對。'],
+  ['【頻率條件欄】','Opcode／SPI/QPI／3/4 byte address／Dummy／Starting Address 由頻率矩陣拆出，只有頻率規格有值；condition 仍保留完整條件。'],
   ['【底色】','底色僅為輔助：變更＝淡黃、新增＝淡綠、移除＝淡灰、待確認＝淡紅。請以「比較結果」欄位為準。'],
   ['',''],['【工作表】',''],
   [COMPARE_SHEET,'新版規格與新舊版比較結果，可用第一列篩選「比較結果」。'],

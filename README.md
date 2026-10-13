@@ -39,7 +39,9 @@ npm run preview
 
 第一列直接是欄位名稱，資料由第二列開始，沒有合併儲存格。「產品規格比較表」欄位：
 
-`比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | max | typ | min | symbol | parameter | condition | description | unit | spec type | 新版頁碼 | 舊版頁碼`
+`比較結果 | 變更欄位 | 變更說明（舊 → 新） | 產品名稱 | max | typ | min | symbol | Opcode | SPI/QPI | 3/4 byte address | Dummy | Starting Address | parameter | condition | description | unit | spec type | 新版頁碼 | 舊版頁碼`
+
+- Opcode／SPI/QPI／3/4 byte address／Dummy／Starting Address 由頻率矩陣拆出，只有頻率規格有值；condition 仍保留完整條件。
 
 - 每個產品、規格、條件獨立一列，數值單位獨立。
 - 空白保持空白，0 仍是數字 0；± 和 VCC 表達式保留文字。
