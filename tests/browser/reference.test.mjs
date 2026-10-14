@@ -32,7 +32,7 @@ test('private reference PDF without stream async iteration: products, DC/AC, mat
  assert.ok(freq.every(x=>x._opcode==='EBh'&&x._dummy===16&&x._mode&&/byte/i.test(x._address)&&['Aligned','Any'].includes(x._start)));
  const specs=r.rows.filter(x=>x['spec type']!=='Command');
  assert.equal(specs.length,1442);
- assert.equal(r.rows.filter(x=>x['spec type']==='Command').length,r.commands.length*r.products.length);
+ for(const product of r.products)for(const c of r.commands)assert.ok(r.rows.some(x=>x['產品名稱']===product&&x._command_sources?.includes(c)));
  const ordinary=r.rows.filter(x=>x.symbol==='fR'&&/^Starting Address: (Aligned|Any)$/.test(x.condition));
  assert.equal(ordinary.length,14);
  assert.ok(ordinary.every(x=>x._start===x.condition.split(': ')[1]));

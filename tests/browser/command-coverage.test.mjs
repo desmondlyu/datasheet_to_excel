@@ -15,10 +15,10 @@ const dir=process.env.SPEC_COMMAND_REFERENCE_DIR;
 const codes=value=>[...String(value||'').matchAll(/\b([0-9a-f]{2})h\b/gi)].map(m=>m[1].toUpperCase()+'h');
 const footnote=/\(\s*\d+(?:\s*,\s*\d+)*\s*\)/;
 const expected={
- 'W25Q32_64_12_25_51_01_02RW-DTR_RevD3 09092026.pdf':[1442,88,96],
- 'Preliminary W25R12_25_51_01_02RW_DTR_Rev_A2 10082026.pdf':[1160,86,91],
- 'Product W25Q33PW_DTR_A2_01262026_Plus Only.pdf':[76,52,53],
- 'W35T51NW AG Rev D 050825.pdf':[121,60,59],
+ 'W25Q32_64_12_25_51_01_02RW-DTR_RevD3 09092026.pdf':[1442,88,96,255],
+ 'Preliminary W25R12_25_51_01_02RW_DTR_Rev_A2 10082026.pdf':[1160,86,91,238],
+ 'Product W25Q33PW_DTR_A2_01262026_Plus Only.pdf':[76,52,53,81],
+ 'W35T51NW AG Rev D 050825.pdf':[121,60,59,59],
 };
 const quiet={...pdfjs,getDocument:options=>pdfjs.getDocument({...options,verbosity:0})};
 
@@ -31,12 +31,23 @@ test('provided PDF collection exports all user commands with template header ord
   const data=await readFile(join(dir,file)),r=await parsePdf(quiet,data);results.set(file,r);
   const specs=r.rows.filter(row=>row['spec type']!=='Command'),commands=r.rows.filter(row=>row['spec type']==='Command');
   const extractedCodes=new Set(r.commands.flatMap(c=>codes(c.opcode))),extractedNames=new Set(r.commands.map(c=>c.command));
-  assert.deepEqual([specs.length,extractedCodes.size,extractedNames.size],expected[file]);
-  assert.equal(commands.length,r.commands.length*r.products.length);
+  const sourceSpecCount=specs.reduce((n,row)=>n+(row._start==='Aligned/Any'?2:1),0);
+  assert.deepEqual([sourceSpecCount,extractedCodes.size,extractedNames.size,r.commands.length],expected[file]);
   for(const product of r.products){
-   const productRows=commands.filter(row=>row['產品名稱']===product);
+   const productRows=r.rows.filter(row=>row['產品名稱']===product&&row._command_sources?.length);
    assert.deepEqual(new Set(productRows.flatMap(row=>codes(row._opcode))),extractedCodes);
-   for(const c of r.commands)assert.ok(productRows.some(row=>row.parameter===c.command&&row._opcode===c.opcode&&row._mode===c.mode&&row.condition.includes(c.setting)));
+   for(const c of r.commands){
+    const covered=productRows.filter(row=>row._command_sources.includes(c));
+    assert.ok(covered.length,`${product}: ${c.opcode} ${c.command} ${c.mode} ${c.setting}`);
+    assert.ok(covered.every(row=>row.condition.includes(c.mode)&&row.condition.includes(c.setting)));
+    const limits=String(c.extra||'').split(';').flatMap(field=>{
+     const match=field.replace(/\(\s*\d+(?:\s*,\s*\d+)*\s*\)/g,'').match(/^\s*(Aligned|Any)\s+Address\s*\(MHz\):\s*(\d+(?:\.\d+)?)(?:\s*(\([^()]+\)))?\s*$/i);
+     return match?[{start:match[1],max:Number(match[2]),qualifier:match[3]||''}]:[];
+    });
+    for(const limit of limits)assert.ok(covered.some(row=>row.unit==='MHz'&&row.max===limit.max&&row.condition.includes(limit.qualifier)&&row._start.split('/').some(start=>start.toLowerCase()===limit.start.toLowerCase())),`${product}: ${c.command} ${limit.start} ${limit.max} MHz ${limit.qualifier}`);
+    if(!limits.length)assert.ok(covered.some(row=>row.max===''&&row.unit===''));
+    if(/^[14](?:d)?-[0-9]d?-[0-9]d?$/.test(c.mode))assert.ok(covered.every(row=>row._mode.startsWith(c.mode[0]==='1'?'SPI':'QPI')));
+   }
   }
   const book=new ExcelJS.Workbook();await book.xlsx.load(await makeWorkbook({...r,filename:file}));
   const sheet=book.getWorksheet(COMPARE_SHEET);
@@ -45,13 +56,31 @@ test('provided PDF collection exports all user commands with template header ord
   sheet.eachRow((row,n)=>{if(n===1)return;
    assert.equal(row.getCell(5).value??'',compareRow(r.rows[n-2])[4]??'');
    assert.ok(!footnote.test(String(row.getCell(5).value||'')));assert.ok(!footnote.test(String(row.getCell(13).value||'')));
-   assert.ok(!/\(\s*Def\s*\)/i.test(String(row.getCell(13).value||'')));
-   if(row.getCell(15).value==='Command'){codes(row.getCell(5).value).forEach(code=>exportedCodes.add(code));exportedNames.add(row.getCell(17).value);
-    assert.ok([6,7,8,9,10].every(col=>row.getCell(col).value===null));
+   assert.ok(!/\(\s*Def\.?\s*\)/i.test(String(row.getCell(13).value||'')));
+   assert.doesNotMatch(String(row.getCell(5).value||''),/h\s*[,]|h\s+\/|\/\s+/);
+   const sourceRow=r.rows[n-2];
+   for(const c of sourceRow._command_sources||[]){
+    codes(c.opcode).forEach(code=>{assert.ok(codes(row.getCell(5).value).includes(code));exportedCodes.add(code);});
+    assert.ok(String(row.getCell(16).value).includes(c.command));exportedNames.add(c.command);
    }
+   if(row.getCell(15).value==='Command'){
+    assert.ok([8,9,10].every(col=>row.getCell(col).value===null));
+    if(sourceRow.unit==='MHz'){assert.equal(typeof row.getCell(7).value,'number');assert.equal(row.getCell(6).value,'MHz');assert.ok(['Aligned','Any','Aligned/Any'].includes(row.getCell(14).value));}
+    else assert.ok([6,7].every(col=>row.getCell(col).value===null));
+   }
+   assert.doesNotMatch(String(row.getCell(19).value||''),/(?:Aligned|Any) Address\s*\(MHz\):\s*\d/);
   });
   assert.deepEqual(exportedCodes,extractedCodes);assert.deepEqual(exportedNames,extractedNames);
-  book.getWorksheet(COMMAND_SHEET).eachRow((row,n)=>{if(n>1){assert.ok(!footnote.test(String(row.getCell(5).value||'')));assert.ok(!footnote.test(String(row.getCell(8).value||'')));assert.ok(!/\(\s*Def\s*\)/i.test(String(row.getCell(8).value||'')));}});
+  book.getWorksheet(COMMAND_SHEET).eachRow((row,n)=>{if(n>1){assert.ok(!footnote.test(String(row.getCell(5).value||'')));assert.ok(!footnote.test(String(row.getCell(8).value||'')));assert.ok(!/\(\s*Def\.?\s*\)/i.test(String(row.getCell(8).value||'')));}});
+  const sourceText=[];book.getWorksheet('Source').eachRow((row,n)=>{if(n>1)sourceText.push(row.getCell(4).value);});assert.deepEqual(sourceText,r.sources.map(s=>s.text));
+  if(file.startsWith('W25Q32_')||file.startsWith('Preliminary')){
+   const fast=r.rows.filter(row=>row['產品名稱']===r.products[0]&&row._opcode==='0Bh/9Ch'&&row._mode==='SPI'&&row._dummy===8);
+   assert.deepEqual(fast.map(row=>[row['spec type'],row._start,row.max]),[['AC','Aligned',133],['AC','Any',104]]);
+   assert.ok(fast.every(row=>row._command_sources.some(c=>c.command==='Fast Read')&&row._command_sources.some(c=>c.command==='Read checksum')));
+   const chip=r.rows.find(row=>row['產品名稱']===r.products[0]&&row.parameter==='Chip Erase'&&row._mode==='SPI');
+   assert.equal(chip._start,'Aligned/Any');assert.equal(chip.max,133);assert.equal(chip.unit,'MHz');
+   assert.ok(r.rows.some(row=>row.symbol==='tCE'&&row.unit==='s'));
+  }
   if(file.startsWith('W25Q32_')){
    const task=quiet.getDocument({data:new Uint8Array(data)});
    try{

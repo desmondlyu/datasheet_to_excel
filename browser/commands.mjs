@@ -1,5 +1,5 @@
 // Command (instruction set) tables are located by header signature, never by fixed page numbers.
-import {clean,makeRow,numericValue,stripNumericNotes,stripDummyNotes} from './spec-core.mjs';
+import {clean,makeRow,numericValue,normalizeOpcode,identityText,interfaceMode,specIdentity,combineStartingAddresses,stripNumericNotes,stripDummyNotes} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 import {isByteCommandTable,parseByteCommandTable} from './byte-commands.mjs';
 
@@ -46,7 +46,7 @@ export function parseCommandTable(table,items,meta,state={}){
   const cy=(lo+hi)/2,hits=columns.map(col=>body.filter(c=>c[0]<col.x1-1&&c[2]>col.x0+1&&c[1]<=cy&&cy<c[3]).sort((a,b)=>a[0]-b[0]));
   const v=hits.map(cs=>clean(cs.map(text).join(' ')));const distinct=new Set(hits.flat().filter(c=>text(c)));
   const get=k=>columns.map((c,j)=>c.key===k?v[j]:null).filter(x=>x!==null);
-  const command=get('command')[0]||'',opcode=stripNumericNotes(get('opcode')[0]||'');
+  const command=get('command')[0]||'',opcode=normalizeOpcode(get('opcode')[0]||'');
   const rowText=clean([...distinct].map(text).join(' '));
   if(!rowText||headerLabels.has(command.toLowerCase()))continue;
   const io=command.match(/Number of Clock[\s(]*(?:IO\s*)?([0-9d]+(?:-[0-9d]+){2})/i);
@@ -70,16 +70,80 @@ export function commandSpecRows(commands,products){
  for(const c of commands){
   const scope=[c.section,c.group].filter(Boolean).join(' ');
   if(/\bFactory[\s-]+(?:Mode|Only)\b/i.test(scope)&&!/\bUser[\s-]+Mode\b/i.test(scope))continue;
-  const opcode=stripNumericNotes(c.opcode),dummy=numericValue(stripDummyNotes(c.dummy));
-  const condition=[`opcode=${opcode}`,c.mode?`IO=${c.mode}`:'',c.setting].filter(Boolean).join('; ');
-  for(const product of products){
-   const r=makeRow(product,{parameter:c.command,condition},{kind:'Command',page:c.page,pdfPage:c.pdf_page,section:clean(c.section)});
-   Object.assign(r,{_opcode:opcode,_mode:c.mode,_address:c.address,_dummy:dummy,_commands:`${opcode} ${c.command}`});
-   r.description=[c.data?`Data: ${c.data}`:'',c.extra].filter(Boolean).join('; ');
+  const opcode=normalizeOpcode(c.opcode),dummy=numericValue(stripDummyNotes(c.dummy)),limits=[];
+  const extra=String(c.extra||'').split(/;\s*/).filter(field=>{
+   const frequency=field.match(/^\s*(Aligned|Any)\s+Address\s*\(\s*MHz\s*\)\s*:\s*(.*?)\s*$/i);
+   if(!frequency)return true;
+   const value=clean(stripNumericNotes(frequency[2])).match(/^(\d+(?:\.\d+)?)(?:\s*(\([^()]+\)))?$/);
+   if(!value||!Number.isFinite(Number(value[1])))return true;
+   limits.push({start:frequency[1].toLowerCase()==='aligned'?'Aligned':'Any',max:Number(value[1]),qualifier:value[2]||''});return false;
+  }).join('; ');
+  const base=[`opcode=${opcode}`,c.mode?`IO=${c.mode}`:'',c.setting].filter(Boolean).join('; ');
+  for(const product of products)for(const limit of limits.length?limits:[null]){
+   const condition=[base,limit?.qualifier,limit?`Starting Address: ${limit.start}`:''].filter(Boolean).join('; ');
+   const r=makeRow(product,{parameter:c.command,condition,max:limit?.max,unit:limit?'MHz':''},{kind:'Command',page:c.page,pdfPage:c.pdf_page,section:clean(c.section)});
+   Object.assign(r,{_opcode:opcode,_mode:interfaceMode(c.mode,c.section),_io:c.mode,_setting:c.setting||'',_address:c.address,_dummy:dummy,_commands:`${opcode} ${c.command}`,_command_sources:[c]});
+   if(limit)r._start=limit.start;
+   r.description=[c.data?`Data: ${c.data}`:'',extra].filter(Boolean).join('; ');
    rows.push(r);
   }
  }
  return rows;
+}
+
+function addressKey(value){
+ const address=clean(stripNumericNotes(value)).toUpperCase();
+ if(/^[-–]+$/.test(address))return 'none';
+ if(/^A31\s*\/\s*A23[-–]A0$/.test(address)||/^3-?\s*\/\s*4[- ]*BYTE(?:S)?(?: ADDRESS)?$/.test(address))return '3/4';
+ const bytes=address.match(/^(\d+)(?:[- ]*BYTES?(?: ADDRESS)?)?$/);if(bytes)return bytes[1];
+ if(/^A\d+[-–]A?\d+(?:\s*,\s*A\d+[-–]A?\d+)*$/.test(address)){
+  const ranges=[...address.matchAll(/A(\d+)[-–]A?(\d+)/g)].map(m=>[Number(m[2]),Number(m[1])]).sort((a,b)=>a[0]-b[0]);
+  let end=0;for(const [lo,hi] of ranges){if(lo!==end||hi<lo)return address;end=hi+1;}
+  if(end%8===0)return String(end/8);
+ }
+ return address;
+}
+const frequencyRemainder=r=>clean(r.condition).split(/[;；]/).map(clean).filter(field=>field&&!/^(?:SPI|QPI)(?:_DTR)?$/i.test(field)&&!/byte(?:s)?\s+address$/i.test(field)&&!/^(?:opcode|Dummy|IO)\s*[:=]/i.test(field)&&!/^Starting\s+Address\s*[:=：]/i.test(field)).map(identityText).join(';');
+const commandName=value=>clean(value).replace(/\bI\s*\/\s*O\b/gi,'IO').replace(/\s+with\s+[34][- ]Byte\s+Addr(?:ess)?$/i,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
+function sameFrequencyScope(spec,command){
+ const codes=normalizeOpcode(command._opcode).split('/'),specCodes=normalizeOpcode(spec._opcode).split('/');
+ const mode=interfaceMode(spec._mode,spec._section),address=addressKey(spec._address);
+ const names=clean(spec.parameter).replace(/\s+(?:maximum\s+)?clock\s+frequency.*$/i,'').replace(/\bI\s*\/\s*O\b/gi,'IO').split('/').map(commandName);
+ return command._setting===''&&spec['產品名稱']===command['產品名稱']&&
+  codes.every(code=>OPCODE_RE.test(code)&&specCodes.includes(code))&&
+  /^(SPI|QPI)(?:_DTR)?$/.test(mode)&&mode===command._mode&&
+  (!spec._io||spec._io===command._io)&&address!==''&&address===addressKey(command._address)&&
+  spec._dummy!==undefined&&identityText(stripDummyNotes(spec._dummy))===identityText(stripDummyNotes(command._dummy))&&
+  spec._start===command._start&&names.includes(commandName(command.parameter))&&
+  frequencyRemainder(spec)===frequencyRemainder(command);
+}
+export function consolidateSpecs(input){
+ const dedup=new Map();
+ for(const source of input){
+  const r={...source,_command_sources:[...(source._command_sources||[])]};
+  if(r._opcode!==undefined)r._opcode=normalizeOpcode(r._opcode);
+  const key=JSON.stringify([specIdentity(r),r['spec type']==='Command'?'':identityText(r._section),...['max','typ','min','unit','description','_mode','_io','_address','_dummy','_start','_commands','_setting'].map(k=>identityText(r[k]))]);
+  const prev=dedup.get(key);
+  if(!prev){dedup.set(key,r);continue;}
+  prev._command_sources=unique([...prev._command_sources,...r._command_sources]);
+  prev._source_conditions=unique([...(prev._source_conditions||[prev.condition]),...(r._source_conditions||[r.condition])]);
+  prev._source_pages=unique([...(prev._source_pages||[prev.page]),...(r._source_pages||[r.page])]);
+ }
+ const rows=[...dedup.values()],specs=rows.filter(r=>r['spec type']==='AC'&&r.unit==='MHz'&&typeof r.max==='number'),absorbed=new Set();
+ for(const c of rows.filter(r=>r['spec type']==='Command'&&r.unit==='MHz')){
+  const matches=specs.filter(s=>sameFrequencyScope(s,c));if(!matches.length)continue;
+  const s=matches[0];
+  if(matches.length===1&&s.max===c.max&&!s._merge_conflict){
+   s._command_sources=unique([...s._command_sources,...c._command_sources]);
+   s._commands=unique([s._commands,summarize(c._command_sources)]).join('；');
+   s.description=unique([s.description,[`${c.parameter}:`,c._io?`IO=${c._io}`:'',c.description].filter(Boolean).join(' ')]).join('; ');
+   if(c._io&&!s._io)s.condition=[s.condition,`IO=${c._io}`].filter(Boolean).join('; ');
+   s._io=c._io;absorbed.add(c);continue;
+  }
+  const reason=matches.length>1?'相同指令與條件對應到多筆 AC 頻率，未自動合併。':s._merge_conflict&&s.max===c.max?s._merge_conflict:`相同指令與條件的頻率不一致：AC ${s.max} MHz、指令表 ${c.max} MHz，未自動合併。`;
+  for(const r of [...matches,c]){r._merge_conflict=unique([r._merge_conflict,reason]).join('；');r._status='review';}
+ }
+ return combineStartingAddresses(rows.filter(r=>!absorbed.has(r)));
 }
 
 // Explicit rules: parameter wording -> command wording. Ordered; first match wins.
@@ -117,7 +181,7 @@ export function linkCommands(rows,commands){
  return rows;
 }
 
-const commandKey=c=>JSON.stringify([c.mode,c.command,c.opcode,c.setting].map(x=>clean(x).toLowerCase()));
+const commandKey=c=>JSON.stringify([c.mode,c.command,c.opcode,c.setting].map(identityText));
 export function compareCommands(newer,older){
  const old=new Map();for(const c of older){const k=commandKey(c);old.set(k,[...(old.get(k)||[]),c]);}
  const seen=new Map();for(const c of newer){const k=commandKey(c);seen.set(k,(seen.get(k)||0)+1);}

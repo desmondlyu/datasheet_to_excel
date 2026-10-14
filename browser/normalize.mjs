@@ -1,4 +1,4 @@
-import {COLUMNS,clean,makeRow,numericValue,productsFromText,stripNumericNotes,stripDummyNotes} from './spec-core.mjs';
+import {COLUMNS,clean,makeRow,numericValue,productsFromText,normalizeOpcode,stripDummyNotes} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 export function normalizeTable(table,items,defaults,meta){
  const cache=new Map();const text=c=>{const key=c.join(',');if(!cache.has(key))cache.set(key,textIn(items,c));return cache.get(key);};
@@ -52,7 +52,7 @@ export function normalizeFrequency(table,items,defaults,meta){
    for(const a of addressHeaders){const opcodeCell=cellAt(x,(a[1]+a[3])/2),opcode=opcodeCell?text(opcodeCell):'';if(!opcode||/^x$/i.test(opcode))continue;
     let condition=`${mode}; ${text(a)}; opcode=${opcode}; Dummy=${cycle}; Starting Address: ${text(align)}`;
     if(+limit.replace(/\(\d+\)/g,'')===200)condition+='; DS bit enabled';
-    for(const product of defaults){const r=makeRow(product,{parameter:text(head)+' maximum clock frequency',condition,max:limit,unit:'MHz'},meta);r.description=[r.description,'Frequency matrix; symbol not specified in source'].filter(Boolean).join('; ');Object.assign(r,{_opcode:stripNumericNotes(opcode),_mode:mode,_address:text(a),_dummy:numericValue(stripDummyNotes(cycle)),_start:text(align)});rows.push(r);}
+    for(const product of defaults){const r=makeRow(product,{parameter:text(head)+' maximum clock frequency',condition,max:limit,unit:'MHz'},meta);r.description=[r.description,'Frequency matrix; symbol not specified in source'].filter(Boolean).join('; ');Object.assign(r,{_opcode:normalizeOpcode(opcode),_mode:mode,_address:text(a),_dummy:numericValue(stripDummyNotes(cycle)),_start:text(align)});rows.push(r);}
    }
   }
  }

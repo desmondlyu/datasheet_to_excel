@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {compareRows, COLUMNS, productsFromText, parsePageInput, numericValue, makeRow} from '../../browser/spec-core.mjs';
+import * as core from '../../browser/spec-core.mjs';
 const row=(extra={})=>({...Object.fromEntries(COLUMNS.map(c=>[c,''])),產品名稱:'W25Q32RW',symbol:'ICC1',parameter:'Standby Current',condition:'/CS = VCC',max:50,'spec type':'DC',...extra});
 test('family expands slash shorthand, preserving all products',()=>assert.equal(productsFromText('W25Q32/64/12/25/51/01/02RW-DTR W25Q32RW').length,7));
 test('explicit pages validate and deduplicate',()=>{assert.deepEqual(parsePageInput('169,170,169'),[169,170]);assert.throws(()=>parsePageInput('0'));assert.throws(()=>parsePageInput('abc'));});
@@ -44,5 +45,29 @@ test('ordinary conditions populate Starting Address only for explicit unambiguou
  ]){
   const r=makeRow('X',{parameter:'Clock frequency',symbol:'fR',condition,max:100},meta);
   assert.equal(r._start,expected,condition);assert.equal(r.condition,condition);
+ }
+});
+test('opcode lists use a single slash format without losing annotations or alias order',()=>{
+ for(const [input,expected] of [['0bh / 9Ch','0Bh/9Ch'],['C7h, 60h','C7h/60h'],['EBh(2) / EDh(11,14)','EBh/EDh'],['02h/02h','02h'],['EBh (Def)','EBh (Def)'],['','']]){
+  assert.equal(core.normalizeOpcode?.(input),expected);
+ }
+});
+test('format-only opcode changes do not become added or removed specifications',()=>{
+ const older=row({parameter:'Fast Read / Read Checksum',condition:'SPI; opcode=0Bh / 9Ch; Dummy=8',_opcode:'0Bh / 9Ch'});
+ const newer={...older,parameter:'Fast Read/Read Checksum',condition:'SPI; opcode=0Bh, 9Ch; Dummy=8',_opcode:'0Bh/9Ch'};
+ assert.deepEqual(compareRows([newer],[older]).map(r=>r._status),['unchanged']);
+});
+test('opcode identity cleanup does not erase numeric parentheses from real conditions',()=>{
+ const older=row({condition:'VCC = (1)'}),newer=row({condition:'VCC = (2)'});
+ assert.deepEqual(compareRows([newer],[older]).map(r=>r._status),['added','removed']);
+});
+test('recognized IO modes have SPI/QPI labels while DTR and mixed octal evidence remain distinct',()=>{
+ for(const [mode,section,expected] of [['1-1-1','','SPI'],['4-4-4','','QPI'],['1-4-4','','SPI'],['1-4d-4d','','SPI_DTR'],['4-4d-4d','','QPI_DTR'],['4-4-4','DTR Commands','QPI_DTR'],['SPI_DTR','','SPI_DTR'],['1-1-1（SDR）；8d-8d-8d（ODDR）','','SPI（SDR）；8d-8d-8d（ODDR）']]){
+  assert.equal(core.interfaceMode?.(mode,section),expected);
+ }
+});
+test('ordinary words ending in d in source headings do not imply DTR signaling',()=>{
+ for(const section of ['Instruction Set Table 1 (Standard SPI Instructions) (1)','Instruction Set Table 2 (Dual/Quad SPI Instructions)','SPI Commands Operable in Both 3-Byte and 4-Byte Address Modes']){
+  assert.equal(core.interfaceMode('1-1-1',section),'SPI',section);
  }
 });

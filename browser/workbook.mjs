@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import {stripNumericNotes,stripDummyNotes} from './spec-core.mjs';
+import {normalizeOpcode,stripDummyNotes} from './spec-core.mjs';
 import {COMPARE_HEADERS,STATUS_LABELS,compareRow} from './comparison-display.mjs';
 export {COMPARE_HEADERS,STATUS_LABELS} from './comparison-display.mjs';
 export const COMPARE_SHEET='產品規格比較表';
@@ -9,7 +9,7 @@ const COMMAND_FIELDS={address:'Address',dummy:'Dummy',data:'Data',extra:'其他�
 function commandRow(c,compared){
  const status=compared?c._status:'uncompared',removed=status==='removed';
  const note=status==='changed'?Object.entries(c._changes||{}).map(([k,v])=>`${COMMAND_FIELDS[k]||k}：${shown(v.old)} → ${shown(v.new)}`).join('；'):status==='added'?'新版新增，舊版無對應指令。':status==='removed'?'舊版有此指令，新版已移除；本列內容為舊版。':status==='review'?'相同 介面模式／指令名稱／Opcode／設定 出現多筆，未自動配對，請人工核對。':'';
- return [STATUS_LABELS[status]||'',note,c.mode,c.command,stripNumericNotes(c.opcode),c.setting,c.address,stripDummyNotes(c.dummy),c.data,c.extra,c.group,c.section,removed?'':c.page,removed?c.page:c._old_page];
+ return [STATUS_LABELS[status]||'',note,c.mode,c.command,normalizeOpcode(c.opcode),c.setting,c.address,stripDummyNotes(c.dummy),c.data,c.extra,c.group,c.section,removed?'':c.page,removed?c.page:c._old_page];
 }
 const FILLS={added:'FFE2F1E7',changed:'FFFFE9BE',review:'FFFFDDDA',removed:'FFE7E9EC'};
 const shown=v=>v===''||v===undefined||v===null?'空白':String(v);
@@ -25,14 +25,14 @@ export async function makeWorkbook(result){
   ['變更','新舊版都有此規格，但 max／typ／min／unit／description 有差異；Command 列也比較 Address／Dummy。差異列在「變更欄位」與「變更說明（舊 → 新）」。'],
   ['新增','新版才有的規格，舊版找不到對應項目。'],
   ['移除','舊版有、新版已沒有的規格；該列數值與頁碼為舊版內容。'],
-  ['待確認','相同產品／規格類型／symbol／parameter／condition 出現多筆，無法一對一配對；舊版候選值列在「變更說明」，請人工核對。'],
+  ['待確認','相同產品／規格類型／symbol／parameter／condition 出現多筆，或 AC 與指令表的同條件頻率有衝突，未自動合併／配對；原因或舊版候選值列在「變更說明」，請人工核對。'],
   ['未變更','新舊版內容相同。'],
   ['未比對','匯出時未提供舊版 PDF，只列出新版規格。'],
-  ['',''],['【配對規則】','以 產品名稱 + spec type + symbol + parameter + condition 配對新舊版。條件或規格名稱改寫時，可能顯示為一筆「新增」加一筆「移除」，請人工核對。'],
-  ['【頻率條件欄】','Opcode 統一列出指令碼：優先使用頻率矩陣的指令碼，其他規格由相關指令帶入並去除重複。SPI/QPI／3/4 byte address／Dummy 也顯示 Command 列的原始 IO 模式、位址位元範圍與 Dummy。Starting Address 從頻率矩陣或 condition 擷取；condition 保留完整條件。'],
+  ['',''],['【配對規則】','以 產品名稱 + spec type + symbol + parameter + condition 配對新舊版，Opcode 組合先統一格式與順序，空格或分隔符不同不視為新增／移除。Aligned/Any 先分開比較，再合併內容與結果相同的列。其他條件或規格名稱改寫時，仍可能顯示為一筆「新增」加一筆「移除」。'],
+  ['【頻率條件欄】','Opcode 統一為 0Bh/9Ch、C7h/60h 等無空格斜線格式。SPI/QPI 顯示介面名稱：1-1-1 為 SPI、4-4-4 為 QPI，DTR 分開標示；原始 IO 模式保留在 condition，混合或未知模式不猜測。Aligned Address (MHz)／Any Address (MHz) 拆成 max、MHz 與 Starting Address；其他條件及規格相同才合併為 Aligned/Any，不同頻率分列。'],
   ['【相關指令】','列出與該規格相關的指令名稱及介面模式；指令碼統一放在 Opcode 欄，詳細 Address／Dummy／Data 請查「指令表」。相關指令僅供查詢，不影響「比較結果」。'],
-  ['【Command 列】','完整 User mode 指令依產品／IO 模式／設定分列，無需有 AC/DC 參數才能列入。Factory-only 章節不加入；User mode 可執行的 Enter Factory Mode 指令仍保留。max／typ／min／unit／symbol 保持空白，不虛構規格；Data 與其他原始欄位列在 description。產品限定請核對 Source 原始 Notes。'],
-  ['【數字註腳】','Opcode／Dummy 移除 (2)、(11,14) 等數字註腳，Dummy 也移除 (Def) 預設註記；數值與其他有效內容保留。condition 與 Source 仍可核對原文。'],
+  ['【Command 列】','完整 User mode 指令均保留。相同指令／模式／Address／Dummy／設定／對齊條件已有 AC 頻率規格時，指令資料整合到 AC，不重複建立 Command 列；沒有對應者仍列為 Command。只有原文明示頻率才填 max／MHz，不補 symbol／typ／min。不同設定、Dummy 與 MHz／ms／s 規格仍分列。Factory-only 章節不加入，User mode 可執行的 Enter Factory Mode 仍保留。Data 等資訊列在 description，來源與產品限定請核對指令表及 Source。'],
+  ['【數字註腳】','Opcode／Dummy 移除 (2)、(11,14) 等數字註腳，Dummy 也移除 (Def)／(Def.) 預設註記；數值與其他有效內容保留。Source 與原始 Byte 證據仍保留原文。'],
   ['指令表來源頁（新版）',pagesText(result.command_pages)],
   ['指令表來源頁（舊版）',result.compared?pagesText(result.old_command_pages):'未比對'],
   ['【底色】','底色僅為輔助：變更＝淡黃、新增＝淡綠、移除＝淡灰、待確認＝淡紅。請以「比較結果」欄位為準。'],

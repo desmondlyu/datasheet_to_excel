@@ -52,19 +52,44 @@ test('command comparison reports changed, added and removed entries',()=>{
  assert.deepEqual(out.map(x=>x._status),['changed','added','removed']);
  assert.deepEqual(out[0]._changes,{dummy:{old:'--',new:'8'}});assert.equal(out[0]._old_page,50);
 });
-test('all user commands become per-product specification rows without fabricated limits',()=>{
+test('all user commands become per-product specification rows with only explicitly supplied limits',()=>{
  assert.equal(typeof commands.commandSpecRows,'function');
  const c={command:'Write Enable',opcode:'06h',mode:'1-1-1',address:'--',dummy:'--',data:'--',extra:'Any Address (MHz): 133',setting:'',group:'',section:'SPI Commands',page:56,pdf_page:58};
  const input=[c,{...c,command:'Read Buffer',opcode:'83h(14)',dummy:'16(3)',setting:'P = 000'},{...c,mode:'4-4-4'}];
  const rows=commands.commandSpecRows(input,['X','Y']);
  assert.equal(rows.length,6);
  assert.deepEqual(rows.filter(r=>r['產品名稱']==='X').map(r=>r._opcode),['06h','83h','06h']);
- assert.ok(rows.every(r=>r['spec type']==='Command'&&r.symbol===''&&r.max===''&&r.typ===''&&r.min===''&&r.unit===''));
- assert.equal(rows[0]._mode,'1-1-1');assert.equal(rows[0]._address,'--');
+ assert.ok(rows.every(r=>r['spec type']==='Command'&&r.symbol===''&&r.max===133&&r.typ===''&&r.min===''&&r.unit==='MHz'&&r._start==='Any'));
+ assert.equal(rows[0]._mode,'SPI');assert.equal(rows[0]._address,'--');assert.match(rows[0].condition,/IO=1-1-1/);
  assert.equal(rows[0].page,56);assert.equal(rows[0]._pdf_page,58);assert.equal(rows[0]._section,'SPI Commands');
  assert.equal(rows[2]._dummy,16);assert.match(rows[2].condition,/P = 000/);
- assert.match(rows[0].description,/Any Address \(MHz\): 133/);
+ assert.doesNotMatch(rows[0].description,/Any Address \(MHz\): 133/);
+ assert.equal(commands.commandSpecRows([{...c,extra:''}],['X'])[0].max,'');
  assert.equal(input[1].opcode,'83h(14)');assert.equal(input[1].dummy,'16(3)');
+});
+test('command address frequencies become separate numeric limits and retain unrelated description fields',()=>{
+ const c={command:'Fast Read',opcode:'0Bh / 9Ch',mode:'1-1-1',address:'A31 / A23-A0',dummy:'8',data:'D7-D0',extra:'Read Bypass: Disable; Aligned Address (MHz): 133(2); Any Address (MHz): 104',setting:'',page:56};
+ const rows=commands.commandSpecRows([c],['X']);
+ assert.deepEqual(rows.map(r=>[r._opcode,r._mode,r._start,r.max,r.unit]),[['0Bh/9Ch','SPI','Aligned',133,'MHz'],['0Bh/9Ch','SPI','Any',104,'MHz']]);
+ assert.ok(rows.every(r=>r.description==='Data: D7-D0; Read Bypass: Disable'));
+ assert.ok(rows.every(r=>r._command_sources.includes(c)));
+ assert.match(c.extra,/Aligned Address \(MHz\): 133\(2\)/);
+});
+test('unknown address-frequency values stay as source text instead of fabricated numeric limits',()=>{
+ const rows=commands.commandSpecRows([{command:'Read',opcode:'03h',mode:'1-1-1',extra:'Aligned Address (MHz): --; Any Address (MHz): 0',dummy:'0(Def.)'}],['X']);
+ assert.equal(rows.length,1);assert.equal(rows[0].max,0);assert.equal(rows[0]._start,'Any');assert.equal(rows[0]._dummy,0);
+ assert.match(rows[0].description,/Aligned Address \(MHz\): --/);
+});
+test('numeric frequencies with explicit qualifications keep their qualification in condition',()=>{
+ const c={command:'Fast Read Quad I/O',opcode:'EBh',mode:'1-4-4',dummy:'16',extra:'Aligned Address (MHz): 200 (DS enable); Any Address (MHz): 133'};
+ const rows=commands.commandSpecRows([c],['X']);
+ assert.deepEqual(rows.map(r=>[r._start,r.max,r.unit]),[['Aligned',200,'MHz'],['Any',133,'MHz']]);
+ assert.match(rows[0].condition,/\(DS enable\)/);assert.doesNotMatch(rows[1].condition,/DS enable/);
+ assert.ok(rows.every(r=>!/Address \(MHz\)/.test(r.description)));
+});
+test('opcode aliases compare by their set rather than spaces, separator or order',()=>{
+ const c={mode:'1-1-1',command:'Chip Erase',opcode:'C7h/60h',setting:'',page:56};
+ assert.deepEqual(compareCommands([{...c,opcode:'60h, C7h'}],[c]).map(r=>r._status),['unchanged']);
 });
 test('factory-only tables are excluded but user commands that enter factory mode are included',()=>{
  assert.equal(typeof commands.commandSpecRows,'function');

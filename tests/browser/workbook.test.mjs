@@ -65,12 +65,12 @@ test('missing command table is stated instead of left blank',async()=>{
 test('related opcodes move to Opcode without shifting mode/address/dummy columns',async()=>{
  const r={...blank(),symbol:'tPP',_status:'uncompared',_commands:'12h Page Program with 4-Byte Addr（1-1-1）；02h Page Program（1-1-1）；02h Page Program（4-4-4）；C7h/60h Chip Erase'};
  const s=(await load({rows:[r,{...r,_opcode:'EBh',_mode:'SPI',_address:'3-/4-byte Address',_dummy:6,_start:'Aligned'},{...blank(),_commands:'20h, 21h'}]})).getWorksheet(COMPARE_SHEET);
- assert.equal(s.getCell('E2').value,'12h, 02h, C7h, 60h');
+ assert.equal(s.getCell('E2').value,'12h/02h/C7h/60h');
  assert.equal(s.getCell('P2').value,'Page Program with 4-Byte Addr（1-1-1）；Page Program（1-1-1）；Page Program（4-4-4）；Chip Erase');
  assert.deepEqual(['K','L','M','N'].map(c=>s.getCell(c+'2').value),[null,null,null,null]);
  assert.equal(s.getCell('E3').value,'EBh');
  assert.deepEqual(['K','L','M','N'].map(c=>s.getCell(c+'3').value),['SPI','3-/4-byte Address',6,'Aligned']);
- assert.equal(s.getCell('E4').value,'20h, 21h');assert.equal(s.getCell('P4').value,null);
+ assert.equal(s.getCell('E4').value,'20h/21h');assert.equal(s.getCell('P4').value,null);
  assert.equal(r._commands,'12h Page Program with 4-Byte Addr（1-1-1）；02h Page Program（1-1-1）；02h Page Program（4-4-4）；C7h/60h Chip Erase');
 });
 

@@ -1,7 +1,22 @@
 export const COLUMNS=['產品名稱','max','typ','min','symbol','parameter','condition','description','unit','spec type','page'];
 export const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
 export const stripNumericNotes=v=>typeof v==='string'?clean(v.replace(/\(\s*\d+(?:\s*[,，]\s*\d+)*\s*\)/g,'')):v;
-export const stripDummyNotes=v=>stripNumericNotes(typeof v==='string'?v.replace(/\(\s*Def\s*\)/gi,''):v);
+export const stripDummyNotes=v=>stripNumericNotes(typeof v==='string'?v.replace(/\(\s*Def\.?\s*\)/gi,''):v);
+const opcodeList=/\b[0-9a-f]{2}h(?:\s*[/,]\s*[0-9a-f]{2}h)*/gi;
+const opcodeNote=String.raw`\s*\(\s*\d+(?:\s*[,，]\s*\d+)*\s*\)`;
+const annotatedOpcodeList=new RegExp(String.raw`\b[0-9a-f]{2}h(?:${opcodeNote})?(?:\s*[/,]\s*[0-9a-f]{2}h(?:${opcodeNote})?)*`,'gi');
+export const normalizeOpcode=v=>clean(stripNumericNotes(v)).replace(opcodeList,list=>[...new Set(list.match(/[0-9a-f]{2}h/gi).map(code=>code.slice(0,-1).toUpperCase()+'h'))].join('/'));
+export const identityText=v=>clean(v).replace(annotatedOpcodeList,list=>normalizeOpcode(list).split('/').sort().join('/')).replace(/\s*\/\s*/g,'/').toLowerCase();
+export function interfaceMode(value,section=''){
+ return clean(value).split(/[；;]/).map(part=>{
+  const mode=part.trim(),label=mode.match(/^(SPI|QPI)(?:[_ -](DTR|DDR|SDR|STR))?$/i);
+  if(label)return label[1].toUpperCase()+(/DTR|DDR/i.test(label[2]||'')?'_DTR':'');
+  const io=mode.match(/^([14])d?-[0-9]d?-[0-9]d?\s*([（(](SDR|ODDR|DDR|STR|DTR)[）)])?$/i);
+  if(!io)return mode;
+  const dtr=io[3]?/DDR|DTR/i.test(io[3]):/\dd(?:-|$)/i.test(mode)||/\b(?:DTR|DDR)\b/i.test(section);
+  return (io[1]==='1'?'SPI':'QPI')+(dtr?'_DTR':'')+(io[2]||'');
+ }).join('；');
+}
 export function numericValue(v){const s=clean(v).replace(/^([+−–-])\s+(?=\d)/,'$1');return /^[+−–-]?\d[\d,]*(?:\.\d+)?$/.test(s)?Number(s.replace(/,/g,'').replace(/[−–]/g,'-')):s;}
 export function parsePageInput(s){if(!s?.trim())return [];const p=s.split(',').map(x=>x.trim());if(p.some(x=>!/^\d+$/.test(x)||+x<1))throw Error('頁碼請使用正整數，以逗號分隔，例如 169,170,171。');return [...new Set(p.map(Number))];}
 // Model names are evidence from the document, not a built-in product catalogue.
@@ -44,12 +59,39 @@ export function makeRow(product,v,meta){
  if(v.alternate)desc.push('Alternate symbol: '+clean(v.alternate));
  r.description=desc.join('; ');return r;
 }
-const identity=r=>JSON.stringify(['產品名稱','spec type','symbol','parameter','condition'].map(k=>clean(r[k]).toLowerCase()));
+export const specIdentity=r=>JSON.stringify(['產品名稱','spec type','symbol','parameter','condition'].map(k=>identityText(r[k])));
+const startingField=/^Starting\s+Address\s*[:=：]\s*(?:Aligned\s*\/\s*Any|Aligned|Any)$/i;
+const withoutStarting=condition=>clean(condition).split(/[;；]/).filter(field=>!startingField.test(field.trim())).map(clean).filter(Boolean).join('; ');
+function withStarting(r,start){
+ const condition=clean(r.condition).split(/[;；]/).map(field=>startingField.test(field.trim())?`Starting Address: ${start}`:field.trim()).join('; ');
+ return {...r,condition,_start:start};
+}
+export function combineStartingAddresses(rows){
+ const groups=new Map();
+ for(const r of rows){
+  if(!['Aligned','Any'].includes(r._start)||r.unit!=='MHz'||typeof r.max!=='number'||r._status==='review')continue;
+  const key=JSON.stringify([specIdentity({...r,condition:withoutStarting(r.condition)}),...['max','typ','min','unit','description','page','_section','_mode','_io','_address','_dummy','_commands','_setting','_status','_changes','_old_page'].map(k=>r[k]??'')]);
+  groups.set(key,[...(groups.get(key)||[]),r]);
+ }
+ const replacements=new Map(),omit=new Set();
+ for(const pair of groups.values()){
+  if(pair.length!==2||pair[0]._start===pair[1]._start)continue;
+  const merged=withStarting(pair[0],'Aligned/Any');
+  merged._source_conditions=[...new Set(pair.flatMap(r=>r._source_conditions||[r.condition]))];
+  merged._command_sources=[...new Set(pair.flatMap(r=>r._command_sources||[]))];
+  replacements.set(pair[0],merged);omit.add(pair[1]);
+ }
+ return rows.filter(r=>!omit.has(r)).map(r=>replacements.get(r)||r);
+}
 export function compareRows(newRows,oldRows){
- const group=rs=>{const m=new Map();for(const r of rs){const k=identity(r);m.set(k,[...(m.get(k)||[]),r]);}return m;};
+ // Pair each address limit before folding equal limits back into a single display row.
+ const expand=rows=>rows.flatMap(r=>r._start==='Aligned/Any'?['Aligned','Any'].map(start=>withStarting(r,start)):[r]);
+ newRows=expand(newRows);oldRows=expand(oldRows);
+ const group=rs=>{const m=new Map();for(const r of rs){const k=specIdentity(r);m.set(k,[...(m.get(k)||[]),r]);}return m;};
  const newer=group(newRows),older=group(oldRows);const out=newRows.map(source=>{
-  const r={...source,_changes:{}};const key=identity(r),prev=older.get(key);
-  if(newer.get(key).length>1||(prev?.length||0)>1){r._status='review';r._candidates=(prev||[]).map(p=>({...p}));}
+  const r={...source,_changes:{}};const key=specIdentity(r),prev=older.get(key);
+  if(r._merge_conflict||prev?.some(p=>p._merge_conflict)){r._status='review';r._merge_conflict=r._merge_conflict||prev.find(p=>p._merge_conflict)._merge_conflict;}
+  else if(newer.get(key).length>1||(prev?.length||0)>1){r._status='review';r._candidates=(prev||[]).map(p=>({...p}));}
   else if(!prev)r._status='added';
   else {
    r._old_page=prev[0].page??'';
@@ -60,5 +102,5 @@ export function compareRows(newRows,oldRows){
   }
   return r;
  });
- return [...out,...oldRows.filter(r=>!newer.has(identity(r))).map(r=>({...r,_status:'removed',_changes:{}}))];
+ return combineStartingAddresses([...out,...oldRows.filter(r=>!newer.has(specIdentity(r))).map(r=>({...r,_status:'removed',_changes:{}}))]);
 }
