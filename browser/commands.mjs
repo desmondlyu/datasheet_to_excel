@@ -166,6 +166,7 @@ function summarize(list){
  const by=new Map();for(const c of list){const k=c.opcode+'|'+c.command;if(!by.has(k))by.set(k,{...c,modes:[]});by.get(k).modes.push(c.mode);}
  return [...by.values()].map(c=>{const m=unique(c.modes);return `${c.opcode} ${c.command}${m.length?`（${m.join(', ')}）`:''}`;}).join('；');
 }
+export {summarize as summarizeCommands};
 export function linkCommands(rows,commands){
  const main=commands.filter(c=>!c.setting);
  for(const r of rows){

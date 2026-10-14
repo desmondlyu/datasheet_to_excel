@@ -3,6 +3,7 @@ import {textItems,linesOfText,textIn,rulingLines,findCells,groupTables} from './
 import {normalizeTable,normalizeFrequency} from './normalize.mjs';
 import {getPageTextContent} from './pdf-text.mjs';
 import {mayHoldCommands,isCommandTable,parseCommandTable,linkCommands,commandSpecRows,consolidateSpecs} from './commands.mjs';
+import {parseReadParameterTable,supplementReadSpecs} from './read-specs.mjs';
 
 export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
  if(data.byteLength>50*1024*1024)throw Error('每份 PDF 上限為 50 MB。');
@@ -89,8 +90,23 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
    }
   }
   linkCommands(rows,commands);
-  const consolidated=consolidateSpecs([...rows,...commandSpecRows(commands,defaults)]);
-  for(const r of consolidated.filter(r=>r._merge_conflict))review.push({page:r.page,pdf_page:r._pdf_page,table:r._table||0,section:'規格與指令頻率核對',reason:r._merge_conflict,raw:[[r['產品名稱'],r._opcode,r.condition,r._merge_conflict]]});
+  const configurations=[],configurationScopes=[];
+  // Multi-column page text interleaves header words; validate the actual cells below.
+  for(const p of pageInfo.filter(p=>/DUMMY/i.test(p.text)&&/CLOCKS/i.test(p.text)&&/MAX(?:IMUM|\.)/i.test(p.text)&&/FREQ/i.test(p.text))){
+   const tables=groupTables(findCells(rulingLines(await p.page.getOperatorList(),pdfjs.OPS,p.viewport)));
+   for(let t=0;t<tables.length;t++){
+    const parsed=parseReadParameterTable(tables[t],p.items,{page:p.printed,pdfPage:p.n,section:p.label,text:p.text,previousText:pageInfo[p.n-2]?.text||''});
+    if(!parsed)continue;
+    configurations.push(...parsed.records);
+    configurationScopes.push(...parsed.scopes);
+    if(!sources.some(s=>s.pdf_page===p.n))sources.push({page:p.printed,pdf_page:p.n,section:'Read parameter table / '+p.label,text:p.text});
+    if(parsed.unparsed.length)review.push({page:p.printed,pdf_page:p.n,table:t+1,section:'Read parameter table / '+p.label,reason:'設定表部分資料無法可靠對應，已保留原文。',raw:parsed.unparsed});
+   }
+  }
+  const supplemental=supplementReadSpecs(consolidateSpecs([...rows,...commandSpecRows(commands,defaults)]),commands,configurations,pageInfo,configurationScopes),consolidated=supplemental.rows;
+  review.push(...supplemental.review);
+  for(const n of supplemental.usedPages){const p=pageInfo[n-1];if(p&&!sources.some(s=>s.pdf_page===n))sources.push({page:p.printed,pdf_page:n,section:'Read frequency source / '+p.label,text:p.text});}
+  for(const r of consolidated.filter(r=>r._merge_conflict&&!r._read_origin))review.push({page:r.page,pdf_page:r._pdf_page,table:r._table||0,section:'規格與指令頻率核對',reason:r._merge_conflict,raw:[[r['產品名稱'],r._opcode,r.condition,r._merge_conflict]]});
   return {rows:consolidated,review,sources,commands,command_pages:[...new Set(commands.map(c=>c.pdf_page))],products:[...new Set(consolidated.map(r=>r['產品名稱']))].sort()};
  }finally{await task.destroy();}
 }
