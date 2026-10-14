@@ -31,7 +31,7 @@ test('provided PDF collection exports all user commands with template header ord
   const data=await readFile(join(dir,file)),r=await parsePdf(quiet,data);results.set(file,r);
   const specs=r.rows.filter(row=>row['spec type']!=='Command'),commands=r.rows.filter(row=>row['spec type']==='Command');
   const extractedCodes=new Set(r.commands.flatMap(c=>codes(c.opcode))),extractedNames=new Set(r.commands.map(c=>c.command));
-  const sourceSpecCount=specs.reduce((n,row)=>n+(row._start==='Aligned/Any'?2:1),0);
+  const sourceSpecCount=specs.filter(row=>!row._read_origin).reduce((n,row)=>n+(row._start==='Aligned/Any'?2:1),0);
   assert.deepEqual([sourceSpecCount,extractedCodes.size,extractedNames.size,r.commands.length],expected[file]);
   for(const product of r.products){
    const productRows=r.rows.filter(row=>row['產品名稱']===product&&row._command_sources?.length);
@@ -39,13 +39,13 @@ test('provided PDF collection exports all user commands with template header ord
    for(const c of r.commands){
     const covered=productRows.filter(row=>row._command_sources.includes(c));
     assert.ok(covered.length,`${product}: ${c.opcode} ${c.command} ${c.mode} ${c.setting}`);
-    assert.ok(covered.every(row=>row.condition.includes(c.mode)&&row.condition.includes(c.setting)));
+    for(const mode of c.mode.split(/[；;]/))assert.ok(covered.some(row=>row.condition.includes(mode)&&row.condition.includes(c.setting)));
     const limits=String(c.extra||'').split(';').flatMap(field=>{
      const match=field.replace(/\(\s*\d+(?:\s*,\s*\d+)*\s*\)/g,'').match(/^\s*(Aligned|Any)\s+Address\s*\(MHz\):\s*(\d+(?:\.\d+)?)(?:\s*(\([^()]+\)))?\s*$/i);
      return match?[{start:match[1],max:Number(match[2]),qualifier:match[3]||''}]:[];
     });
     for(const limit of limits)assert.ok(covered.some(row=>row.unit==='MHz'&&row.max===limit.max&&row.condition.includes(limit.qualifier)&&row._start.split('/').some(start=>start.toLowerCase()===limit.start.toLowerCase())),`${product}: ${c.command} ${limit.start} ${limit.max} MHz ${limit.qualifier}`);
-    if(!limits.length)assert.ok(covered.some(row=>row.max===''&&row.unit===''));
+    if(!limits.length)assert.ok(covered.some(row=>(row.max===''&&row.unit==='')||row._read_origin));
     if(/^[14](?:d)?-[0-9]d?-[0-9]d?$/.test(c.mode))assert.ok(covered.every(row=>row._mode.startsWith(c.mode[0]==='1'?'SPI':'QPI')));
    }
   }

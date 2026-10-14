@@ -66,6 +66,8 @@ Excel 包含：
 
 讀取頻率的補充解析獨立於既有 AC/DC、指令表與頻率矩陣規則：辨識指定 Dummy 的 SPI/QPI、排除 03h 與 DTR、DTR、03h 四種 AC 群組，並涵蓋狀態、ID、SFDP、安全暫存器與 Read Buffer 等讀取用途。明確的指令頻率表優先，不套用一般群組；正文明示的 fR／FR 對應優先於一般分類。中途 Set Read Parameters 表依表頭、Opcode、SPI/QPI、DTR 與設定逐列保留 Dummy／頻率，symbol、min、typ 只由同產品的對應 AC 群組帶入。找不到群組時保留原指令；無法辨識的設定表值不回退套用一般頻率。未列於指令總表的 Opcode、重複設定標示待確認；註腳與來源條件保留，不推定缺少的位址或設定。指定 AC 頁碼未包含群組時，不擴充這些頻率。
 
+Octal 指令表同時列出 SDR 與 ODDR 協定時，產品規格比較表按指令階段分列：`1-*-*` 在 SPI/QPI 欄顯示 `SDR`，`8d-*-*` 顯示 `DDR`，原協定保留在 condition。`1-1d-8d`、`1-8d-8d` 依第一階段仍屬 SDR，不因資料階段帶 d 而套用 DDR。Read 指令只從同產品、同模式的 AC 頻率群組回填 unit／max／typ／min／symbol；`Clock frequency for Read (...)` 中明列的 Opcode 優先，其他 Read 指令對應 `Clock frequency except for Read`，不同溫度條件分列。缺少對應群組、未辨識協定保留 Command 原文且不補頻率。明確指令頻率表仍優先；獨立指令表保持原始支援模式，其他 SPI/QPI 文件的顯示規則不變。
+
 版本配對使用產品、規格類型、symbol、parameter、condition，Opcode 組合先正規化，空格、分隔符或組合順序不同不視為新增／移除。已合併的 Aligned／Any 先各自比較，再合併內容與比較結果相同的列，避免其中一種頻率改變時錯配。相同鍵有多筆不同規格時標為待確認，不任意覆蓋；其他實際條件或規格名稱變更仍可能呈現一筆新增與一筆移除。
 
 ## 資料處理與限制

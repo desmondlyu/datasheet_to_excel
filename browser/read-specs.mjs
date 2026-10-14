@@ -49,6 +49,7 @@ export function parseReadParameterTable(table,items,meta){
 }
 
 export function supplementReadSpecs(rows,commands,configurations,pageInfo,scopes=[]){
+ rows=supplementOctalReads(rows,commands);
  const groups=rows.filter(r=>groupKind(r)),review=[],usedPages=new Set();
  if(!groups.length)return {rows,review,usedPages};
  const references=[];
@@ -119,4 +120,36 @@ export function supplementReadSpecs(rows,commands,configurations,pageInfo,scopes
  }
  for(const r of output.filter(r=>r._read_origin&&r._merge_conflict))review.push({page:r.page,pdf_page:r._pdf_page,table:0,section:'Read frequency / '+r._section,reason:r._merge_conflict,raw:[[r._opcode,r.condition,r.description]]});
  return {rows:output,review,usedPages};
+}
+
+// Octal instruction tables state the command-phase protocol separately from data timing.
+// In particular, 1-1d-8d belongs to SDR mode; only an 8d command phase selects DDR.
+function supplementOctalReads(rows,commands){
+ if(!commands.some(c=>/(?:^|[；;])\s*8d-/i.test(c.mode)))return rows;
+ const protocol=raw=>/^1-[^-\s]+-[^\s（(]+(?:\s*[（(][^）)]*[）)])?$/i.test(raw)?'SDR':/^8d-[^-\s]+-[^\s（(]+(?:\s*[（(][^）)]*[）)])?$/i.test(raw)?'DDR':'';
+ const variants=c=>String(c.mode||'').split(/[；;]/).map(clean).map(raw=>({raw,mode:protocol(raw)})).filter(v=>v.mode);
+ const groupMode=r=>clean(r.condition).match(/^(SDR|DDR|ODDR)(?:\s*;|$)/i)?.[1]?.toUpperCase().replace('ODDR','DDR');
+ const kind=r=>r['spec type']==='AC'&&r.unit==='MHz'&&groupMode(r)?(/^Clock frequency except for Read\s*$/i.test(r.parameter)?'octal-except':/^Clock frequency for Read\s*\([0-9a-fh/\s]+\)/i.test(r.parameter)?'octal-read':''):'';
+ const groups=rows.filter(r=>kind(r));if(!groups.length)return rows;
+ const explicit=new Set(rows.filter(r=>r.unit==='MHz').flatMap(r=>r._command_sources||[]));
+ const protectedCommand=c=>explicit.has(c)||/\bMHz\b/i.test(c.extra||'');
+ const specificCodes=product=>groups.filter(g=>g['產品名稱']===product&&kind(g)==='octal-read').flatMap(g=>codes(g.parameter));
+ const matches=(g,c,v)=>groupMode(g)===v.mode&&(kind(g)==='octal-read'?codes(g.parameter).some(code=>codes(c.opcode).includes(code)):!specificCodes(g['產品名稱']).some(code=>codes(c.opcode).includes(code)));
+ return rows.flatMap(row=>{
+  if(kind(row)){
+   const eligible=commands.filter(isRead).filter(c=>!protectedCommand(c)).flatMap(c=>variants(c).filter(v=>matches(row,c,v)).map(v=>({...c,mode:v.raw})));
+   return [{...row,_mode:groupMode(row),_read_group:kind(row),_commands:summarizeCommands(eligible),_command_basis:'Octal AC read group'}];
+  }
+  const c=row['spec type']==='Command'&&row._command_sources?.[0];
+  if(!c||protectedCommand(c)||!groups.some(g=>g['產品名稱']===row['產品名稱']))return [row];
+  const modes=variants(c);if(!modes.length)return [row];
+  const forMode=v=>({...row,_mode:v.mode||v.raw,_io:v.raw,condition:row.condition.replace(`IO=${c.mode}`,`IO=${v.raw}`)});
+  const applicable=isRead(c)?groups.filter(g=>g['產品名稱']===row['產品名稱']).flatMap(g=>modes.filter(v=>matches(g,c,v)).map(v=>({g,v}))):[];
+  const enriched=applicable.map(({g,v})=>({...forMode(v),'spec type':'AC',unit:g.unit,max:g.max,typ:g.typ,min:g.min,symbol:g.symbol,
+   condition:[forMode(v).condition,g.condition].filter(Boolean).join('; '),description:[row.description,g.description,`AC read group: ${g.parameter} (page ${g.page})`].filter(Boolean).join('; '),
+   page:g.page,_pdf_page:g._pdf_page,_section:g._section,_notes:g._notes,_read_group:kind(g),_read_origin:'octal-read-group',_source_pages:[row.page,g.page],_source_conditions:[row.condition,g.condition]}));
+  // Missing or unrecognized mode-specific AC evidence never removes the inventory row.
+  const unknown=String(c.mode||'').split(/[；;]/).map(clean).filter(raw=>raw&&!protocol(raw)).map(raw=>({raw,mode:''}));
+  return [...enriched,...modes.filter(v=>!applicable.some(a=>a.v===v)).map(forMode),...unknown.map(forMode)];
+ });
 }
