@@ -51,7 +51,7 @@ test('command sheet lists commands and related-command columns are filled',async
  const r={...blank(),產品名稱:'X',symbol:'tPP',parameter:'Page Program Time',_status:'uncompared',_commands:'02h Page Program（1-1-1）',_command_basis:'名稱規則對應'};
  const cmd={mode:'1-1-1',command:'Page Program',opcode:'02h',setting:'',address:'A23-A0',dummy:'--',data:'D7-D0',extra:'',group:'',section:'6.2.1',page:56,pdf_page:58};
  const w=await load({rows:[r],commands:[cmd],command_pages:[58]});
- const s=w.getWorksheet(COMPARE_SHEET);assert.equal(s.getCell('E2').value,'02h');assert.equal(s.getCell('P2').value,'Page Program（1-1-1）');assert.ok(!COMPARE_HEADERS.includes('對應依據'));
+ const s=w.getWorksheet(COMPARE_SHEET);assert.equal(s.getCell('E2').value,'02h');assert.equal(s.getCell('P2').value,'Page Program（1-1-1）');assert.equal(s.getCell('K2').value,'SPI');assert.ok(!COMPARE_HEADERS.includes('對應依據'));
  const c=w.getWorksheet(COMMAND_SHEET);assert.deepEqual(c.getRow(1).values.slice(1),COMMAND_HEADERS);
  assert.deepEqual([1,2,3,4,5,6,7].map(i=>c.getRow(2).getCell(i).value),['未比對',null,'1-1-1','Page Program','02h',null,'A23-A0']);assert.equal(c.getCell('M2').value,56);
  const text=[];w.getWorksheet('說明').eachRow(x=>text.push(x.values.slice(1).join('|')));assert.match(text.join('\n'),/指令表來源頁（新版）\|PDF 第 58 頁/);
@@ -67,11 +67,23 @@ test('related opcodes move to Opcode without shifting mode/address/dummy columns
  const s=(await load({rows:[r,{...r,_opcode:'EBh',_mode:'SPI',_address:'3-/4-byte Address',_dummy:6,_start:'Aligned'},{...blank(),_commands:'20h, 21h'}]})).getWorksheet(COMPARE_SHEET);
  assert.equal(s.getCell('E2').value,'12h/02h/C7h/60h');
  assert.equal(s.getCell('P2').value,'Page Program with 4-Byte Addr（1-1-1）；Page Program（1-1-1）；Page Program（4-4-4）；Chip Erase');
- assert.deepEqual(['K','L','M','N'].map(c=>s.getCell(c+'2').value),[null,null,null,null]);
+ assert.deepEqual(['K','L','M','N'].map(c=>s.getCell(c+'2').value),['Both',null,null,null]);
  assert.equal(s.getCell('E3').value,'EBh');
  assert.deepEqual(['K','L','M','N'].map(c=>s.getCell(c+'3').value),['SPI','3-/4-byte Address',6,'Aligned']);
  assert.equal(s.getCell('E4').value,'20h/21h');assert.equal(s.getCell('P4').value,null);
  assert.equal(r._commands,'12h Page Program with 4-Byte Addr（1-1-1）；02h Page Program（1-1-1）；02h Page Program（4-4-4）；C7h/60h Chip Erase');
+});
+test('Excel backfills SPI QPI and Both while leaving source modes and conditions intact',async()=>{
+ const related=['02h Program（1-1-1）','02h Program（4-4-4）','02h Program（1-1-1, 4-4-4）'];
+ const rows=related.map(_commands=>({...blank(),_commands,condition:'Original test fixture condition'}));
+ rows.push({...rows[2],_mode:'SPI_DTR'},{...blank(),_commands:'EBh Read（1-4d-4d）'});
+ const w=await load({rows,sources:[{page:1,pdf_page:1,section:'Test fixture',text:related.join('\n')}]});
+ const s=w.getWorksheet(COMPARE_SHEET);
+ assert.deepEqual([2,3,4,5,6].map(n=>s.getCell('K'+n).value),['SPI','QPI','Both','SPI_DTR',null]);
+ assert.equal(s.getCell('P4').value,'Program（1-1-1, 4-4-4）');assert.equal(s.getCell('R4').value,rows[2].condition);
+ assert.equal(rows[2]._mode,undefined);assert.equal(w.getWorksheet('Source').getCell('D2').value,related.join('\n'));
+ const info=[];w.getWorksheet('說明').eachRow(row=>info.push(row.values.slice(1).join('|')));
+ assert.match(info.join('\n'),/1-1-1 回填 SPI.*4-4-4 回填 QPI.*兩者都有回填 Both/);
 });
 
 test('ordinary Aligned and Any conditions appear separately in column N',async()=>{

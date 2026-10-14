@@ -43,7 +43,7 @@ npm run preview
 
 - 欄位順序依 `title_sequence.xlsx`，不再匯出「對應依據」；瀏覽器預覽與 Excel 使用相同欄位及內容。
 - Opcode 優先使用頻率矩陣指令碼，其他規格則由相關指令帶入並去除重複；空格、逗號與斜線統一為 `0Bh/9Ch`、`C7h/60h`。SPI/QPI 欄顯示介面名稱：`1-1-1` 為 SPI、`4-4-4` 為 QPI；可辨識的 Dual/Quad SPI 仍為 SPI，DTR 分開標示。原始 IO 模式保留於 condition，混合 SDR／ODDR 或其他未辨識模式不強制改成 QPI。Address／Dummy 由頻率矩陣或指令表帶出；Starting Address 也會從一般規格的 condition 擷取。
-- 相關指令：依原文 opcode 或明確名稱規則（例如 Page Program Time → Page Program 類指令）帶出指令名稱與介面模式；找不到可靠對應則留空，不猜測。指令碼統一放在 Opcode 欄，相關指令不影響原 AC/DC 規格的「比較結果」。
+- 相關指令：依原文 opcode 或明確名稱規則（例如 Page Program Time → Page Program 類指令）帶出指令名稱與介面模式；找不到可靠對應則留空，不猜測。SPI/QPI 欄空白時，依相關指令回填：只有 `1-1-1` → `SPI`，只有 `4-4-4` → `QPI`，兩者都有 → `Both`；保留該列已有的明確模式（包含 DTR），其他 IO 格式不套用此回填。預覽與 Excel 同步，原始相關指令、條件及比較結果不變。
 - 指令表的 `Aligned Address (MHz)`／`Any Address (MHz)` 轉成 max、MHz 與 Starting Address，不再只藏在 description；其他條件及所有規格相同時合為 `Aligned/Any`，不同頻率則分列。
 - 完整 User mode 指令依產品／IO 模式／設定列入比較表，不再受 AC/DC 對應規則限制。相同指令、模式、Address、Dummy、設定與對齊條件已有 AC 頻率規格時，整合指令名稱與 Data 等資訊到 AC 列，不再重複建立 Command 列；無對應者保留 `spec type = Command`。數值衝突或多筆候選保留並標示待確認。symbol／typ／min 不補值；只有來源明示的頻率才填 max／MHz，其他 Data 與欄位放在 description。不同 Dummy／設定，以及 MHz 頻率與 ms／s 執行時間仍分列，不能只憑 Opcode 合併。Factory-only 章節不加入，User mode 可執行的 Enter Factory Mode 指令仍保留。產品限定請核對 Source 原始 Notes；指定頁碼只限制電性表格，指令表仍由完整 PDF 自動偵測。
 - 比較表與指令表的 Opcode／Dummy 移除 `(2)`、`(11,14)` 等數字註腳，Dummy 也移除 `(Def)`／`(Def.)` 預設註記（例如 `6 (Def.)` → `6`），保留數值與其他有效內容；Source、獨立指令表其他欄位與原始 Byte 證據仍保留原文，整合列的 condition 保留實際 IO 與對齊條件。

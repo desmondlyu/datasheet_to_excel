@@ -30,7 +30,7 @@ export async function makeWorkbook(result){
   ['未比對','匯出時未提供舊版 PDF，只列出新版規格。'],
   ['',''],['【配對規則】','以 產品名稱 + spec type + symbol + parameter + condition 配對新舊版，Opcode 組合先統一格式與順序，空格或分隔符不同不視為新增／移除。Aligned/Any 先分開比較，再合併內容與結果相同的列。其他條件或規格名稱改寫時，仍可能顯示為一筆「新增」加一筆「移除」。'],
   ['【頻率條件欄】','Opcode 統一為 0Bh/9Ch、C7h/60h 等無空格斜線格式。SPI/QPI 顯示介面名稱：1-1-1 為 SPI、4-4-4 為 QPI，DTR 分開標示；原始 IO 模式保留在 condition，混合或未知模式不猜測。Aligned Address (MHz)／Any Address (MHz) 拆成 max、MHz 與 Starting Address；其他條件及規格相同才合併為 Aligned/Any，不同頻率分列。'],
-  ['【相關指令】','列出與該規格相關的指令名稱及介面模式；指令碼統一放在 Opcode 欄，詳細 Address／Dummy／Data 請查「指令表」。相關指令僅供查詢，不影響「比較結果」。'],
+  ['【相關指令】','列出與該規格相關的指令名稱及介面模式，指令碼放在 Opcode 欄。SPI/QPI 空白時，相關指令只有 1-1-1 回填 SPI、只有 4-4-4 回填 QPI、兩者都有回填 Both；保留該列已有的明確模式（包含 DTR），其他 IO 格式不猜測。原始相關指令、條件與比較結果不變；詳細 Address／Dummy／Data 請查「指令表」。'],
   ['【Command 列】','完整 User mode 指令均保留。相同指令／模式／Address／Dummy／設定／對齊條件已有 AC 頻率規格時，指令資料整合到 AC，不重複建立 Command 列；沒有對應者仍列為 Command。只有原文明示頻率才填 max／MHz，不補 symbol／typ／min。不同設定、Dummy 與 MHz／ms／s 規格仍分列。Factory-only 章節不加入，User mode 可執行的 Enter Factory Mode 仍保留。Data 等資訊列在 description，來源與產品限定請核對指令表及 Source。'],
   ['【數字註腳】','Opcode／Dummy 移除 (2)、(11,14) 等數字註腳，Dummy 也移除 (Def)／(Def.) 預設註記；數值與其他有效內容保留。Source 與原始 Byte 證據仍保留原文。'],
   ['指令表來源頁（新版）',pagesText(result.command_pages)],

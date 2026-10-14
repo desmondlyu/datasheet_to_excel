@@ -2,6 +2,12 @@
 import {numericValue,normalizeOpcode,interfaceMode,stripDummyNotes} from './spec-core.mjs';
 export const STATUS_LABELS={changed:'變更',added:'新增',removed:'移除',review:'待確認',unchanged:'未變更',uncompared:'未比對'};
 export const COMPARE_HEADERS=['比較結果','變更欄位','變更說明（舊 → 新）','產品名稱','Opcode','unit','max','typ','min','symbol','SPI/QPI','3/4 byte address','Dummy','Starting Address','spec type','相關指令','parameter','condition','description','新版頁碼','舊版頁碼'];
+function relatedInterface(text){
+ const modes=new Set([...text.matchAll(/(?:^|[^\w-])(1-1-1|4-4-4)(?=$|[^\w-])/g)].map(match=>match[1]));
+ if(modes.has('1-1-1')&&modes.has('4-4-4'))return 'Both';
+ if(modes.has('1-1-1'))return 'SPI';
+ if(modes.has('4-4-4'))return 'QPI';
+}
 function bodyValues(r){
  const opcodes=[],names=[];
  for(const raw of String(r._commands||'').split(/[；;]/)){
@@ -10,7 +16,8 @@ function bodyValues(r){
   if(match)opcodes.push(...match[1].match(/[0-9a-f]{2}h/gi).map(code=>code.slice(0,-1).toUpperCase()+'h'));
   const name=(match?entry.slice(match[0].length):entry).trim();if(name)names.push(name);
  }
- return {Opcode:normalizeOpcode(r._opcode)||normalizeOpcode([...new Set(opcodes)].join('/')),'SPI/QPI':r._mode===undefined?undefined:interfaceMode(r._mode,r._section),'3/4 byte address':r._address,Dummy:numericValue(stripDummyNotes(r._dummy)),'Starting Address':r._start,'相關指令':names.join('；')};
+ const mode=r._mode===undefined?undefined:interfaceMode(r._mode,r._section),related=names.join('；');
+ return {Opcode:normalizeOpcode(r._opcode)||normalizeOpcode([...new Set(opcodes)].join('/')),'SPI/QPI':mode||relatedInterface(related)||mode,'3/4 byte address':r._address,Dummy:numericValue(stripDummyNotes(r._dummy)),'Starting Address':r._start,'相關指令':related};
 }
 const shown=v=>v===''||v===undefined||v===null?'空白':String(v);
 function explain(r){

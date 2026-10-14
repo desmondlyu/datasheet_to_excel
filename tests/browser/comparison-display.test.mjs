@@ -19,6 +19,34 @@ test('preview uses canonical opcodes and interface labels without rewriting raw 
  const values=compareRow(row);
  assert.equal(values[4],'C7h/60h');assert.equal(values[10],'QPI');assert.equal(values[17],row.condition);
 });
+test('missing interface labels are filled from exact related-command modes',async()=>{
+ const {compareRow}=await import('../../browser/comparison-display.mjs');
+ for(const [related,expected] of [
+  ['02h Page Program（1-1-1）','SPI'],
+  ['02h Page Program（4-4-4）','QPI'],
+  ['02h Page Program（1-1-1, 4-4-4）','Both'],
+  ['02h Page Program（1-1-1）；02h Page Program（4-4-4）','Both'],
+  ['02h Page Program (4-4-4 OR 1-1-1)','Both'],
+ ]){
+  const row={_commands:related,condition:'Original test fixture condition',max:0,_status:'uncompared'},before=JSON.stringify(row);
+  const values=compareRow(row);
+  assert.equal(values[10],expected);assert.equal(values[17],row.condition);assert.equal(values[6],0);
+  assert.equal(JSON.stringify(row),before);
+  assert.equal(compareRow({...row,_mode:''})[10],expected);
+ }
+});
+test('related-command backfill does not override explicit row modes',async()=>{
+ const {compareRow}=await import('../../browser/comparison-display.mjs');
+ for(const mode of ['SPI','QPI','SPI_DTR','QPI_DTR']){
+  assert.equal(compareRow({_mode:mode,_commands:'02h Page Program（1-1-1, 4-4-4）'})[10],mode);
+ }
+});
+test('unsupported or partial IO tokens do not fabricate a SPI/QPI label',async()=>{
+ const {compareRow}=await import('../../browser/comparison-display.mjs');
+ for(const related of ['', '02h Page Program','EBh Read（1-4-4, 4-4d-4d）','EBh Read（1-1-1d, 4-4-4d）','EBh Read（11-1-1, 1-1-10, 1-1-1-4, 4-4-4-4）']){
+  assert.equal(compareRow({_commands:related})[10],undefined,related);
+ }
+});
 test('presentation removes numeric notes and Dummy defaults while leaving raw conditions intact',async()=>{
  const {COMPARE_HEADERS,compareRow}=await import('../../browser/comparison-display.mjs');
  const row={_opcode:'EBh(2)/EDh(11, 14)',_dummy:'16(3)',_address:'3(4)',condition:'opcode=EBh(2); Dummy=16(3)',_command_basis:'名稱規則對應'};

@@ -52,6 +52,11 @@ test('provided PDF collection exports all user commands with template header ord
   const book=new ExcelJS.Workbook();await book.xlsx.load(await makeWorkbook({...r,filename:file}));
   const sheet=book.getWorksheet(COMPARE_SHEET);
   assert.deepEqual(sheet.getRow(1).values.slice(1),COMPARE_HEADERS);
+  const tpp=r.rows.find(row=>row.parameter==='Page Program Time');
+  assert.ok(tpp);assert.equal(tpp._mode,undefined);
+  const expectedMode=file.startsWith('W35T')?'SPI':'Both';
+  assert.equal(compareRow(tpp)[10],expectedMode);
+  assert.equal(sheet.getCell(`K${r.rows.indexOf(tpp)+2}`).value,expectedMode);
   const exportedCodes=new Set(),exportedNames=new Set();
   sheet.eachRow((row,n)=>{if(n===1)return;
    assert.equal(row.getCell(5).value??'',compareRow(r.rows[n-2])[4]??'');
