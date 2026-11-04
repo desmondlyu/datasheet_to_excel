@@ -65,7 +65,7 @@ $('export-all').onclick=()=>download(false);$('export-filtered').onclick=()=>dow
 let textState=null,textWorker=null,textGen=0,textLib=null,textSelected=null;
 const textBusy=v=>{$('text-run').disabled=v;$('text-run').textContent=v?'正在比對…':'比對文字敘述';$('text-cancel').hidden=!v;};
 function textStop(){textGen++;textWorker?.terminate();textWorker=null;textBusy(false);}
-function textClear(){textState=null;textSelected=null;$('text-export').disabled=true;$('text-summary').hidden=true;$('text-error').hidden=true;$('text-progress').textContent='';$('text-sections').replaceChildren(el('p','尚未比對。','text-empty'));$('text-detail').replaceChildren(el('p','選擇左側章節查看舊版／新版並排差異。','text-empty'));}
+function textClear(){textState=null;textSelected=null;$('text-export').disabled=true;$('text-export-md').disabled=true;$('text-summary').hidden=true;$('text-error').hidden=true;$('text-progress').textContent='';$('text-sections').replaceChildren(el('p','尚未比對。','text-empty'));$('text-detail').replaceChildren(el('p','選擇左側章節查看舊版／新版並排差異。','text-empty'));}
 function textInvalidate(){if(!textState&&!textWorker)return;textStop();textClear();$('text-progress').textContent='檔案已變更，請重新比對文字敘述。';}
 $('old-file').addEventListener('change',textInvalidate);$('compare').addEventListener('change',textInvalidate);
 $('text-cancel').onclick=()=>{textStop();textClear();$('text-progress').textContent='已取消文字比對。';};
@@ -82,7 +82,7 @@ $('text-run').onclick=async()=>{
   if(run!==textGen)return;
   textState={...json,manual:new Set()};textRebuild();
   $('text-progress').textContent=`比對完成：新版 ${json.newDoc.sections.length} 個章節（PDF ${json.newDoc.pages} 頁），舊版 ${json.oldDoc.sections.length} 個章節（PDF ${json.oldDoc.pages} 頁）。`;
-  $('text-export').disabled=false;
+  $('text-export').disabled=false;$('text-export-md').disabled=false;
  }catch(err){if(run!==textGen)return;textClear();$('text-error').textContent=err.message||'文字比對失敗。';$('text-error').hidden=false;$('text-progress').textContent='文字比對未完成。';}
  finally{if(run===textGen){textWorker?.terminate();textWorker=null;textBusy(false);}}
 };
@@ -135,7 +135,7 @@ function textDetail(){
  const table=el('table',undefined,'text-table');const thead=el('thead'),hr=el('tr');['狀態','舊版','新版'].forEach(t=>{const th=el('th',t);th.scope='col';hr.append(th);});thead.append(hr);table.append(thead);
  const body=el('tbody');
  for(const p of rows){const s=shownStatus(p.status),tr=el('tr',undefined,`p-${s}`);const st=el('td');st.append(textBadge(s));
-  const cell=(side,par)=>{const td=el('td');if(!par){td.append(el('span',side==='old'?'（舊版無此段）':'（新版無此段）','text-missing'));return td;}td.append(...(p.status==='added'||p.status==='removed'?[document.createTextNode(par.text)]:chunkNodes(p.chunks,side)));td.append(el('small',` p.${par.page}`,'text-page'));return td;};
+  const cell=(side,par)=>{const td=el('td');if(!par){td.append(el('span',side==='old'?'（舊版無此段）':'（新版無此段）','text-missing'));return td;}td.append(...(p.status==='added'||p.status==='removed'?[document.createTextNode(par.text)]:chunkNodes(p.chunks,side)));const range=par.endPage&&par.endPage>par.page?par.page+'–'+par.endPage:par.page;td.append(el('small',` p.${range}`,'text-page'));return td;};
   tr.append(st,cell('old',p.old),cell('new',p.new));body.append(tr);}
  table.append(body);box.append(table);
  if(hidden)box.append(el('p',`已隱藏 ${hidden} 段相同段落。取消勾選「只顯示差異段落」可顯示全部。`,'text-note'));
@@ -144,3 +144,15 @@ function textDetail(){
 for(const id of ['text-status','text-hide-part','text-only-diff'])$(id).addEventListener('change',textRender);
 $('text-search').addEventListener('input',textRender);
 $('text-export').onclick=async()=>{if(!textState)return;$('text-export').disabled=true;try{const {makeTextDiffWorkbook}=await import('./text-diff-workbook.mjs');const bytes=await makeTextDiffWorkbook({newDoc:textState.newDoc,oldDoc:textState.oldDoc,report:textState.report,filename:textState.filename,oldFilename:textState.oldFilename});const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=el('a');a.href=url;a.download='datasheet_text_diff.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(err){$('text-error').textContent='匯出 Excel 失敗：'+(err.message||err);$('text-error').hidden=false;}finally{$('text-export').disabled=!textState;}};
+
+// Developer audit: export preprocessed Markdown without uploading PDF contents.
+$('text-export-md').onclick=async()=>{
+ if(!textState)return;
+ try{
+  const {toComparisonMarkdown}=await import('./narrative-structure.mjs');
+  const markdown=toComparisonMarkdown(textState.newDoc,textState.oldDoc,{filename:textState.filename,oldFilename:textState.oldFilename});
+  const url=URL.createObjectURL(new Blob([markdown],{type:'text/markdown;charset=utf-8'}));
+  const link=el('a');link.href=url;link.download='datasheet_narrative_preprocessed.md';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }catch(err){$('text-error').textContent='匯出 Markdown 失敗：'+(err.message||err);$('text-error').hidden=false;}
+};
