@@ -22,7 +22,7 @@
 <div id="error" class="error" role="alert" hidden></div>
 <details id="error-detail" class="error-detail" hidden><summary>錯誤詳細資訊（可複製回報）</summary><pre id="error-report"></pre></details>
 <div class="metrics"><div><span>規格列數</span><strong id="row-count">—</strong></div><div><span>產品型號</span><strong id="product-count">—</strong></div><div><span>變更 / 新增 / 移除</span><strong id="change-count">—</strong></div><div><span>待核對表格</span><strong id="review-count">—</strong></div></div>
-<nav class="tabs" aria-label="結果檢視"><button class="active" data-tab="specs" aria-pressed="true">標準化規格</button><button data-tab="review" aria-pressed="false">待核對原表</button><button data-tab="source" aria-pressed="false">來源文字與註解</button></nav>
+<nav class="tabs" aria-label="結果檢視"><button class="active" data-tab="specs" aria-pressed="true">標準化規格</button><button data-tab="review" aria-pressed="false">待核對原表</button><button data-tab="source" aria-pressed="false">來源文字與註解</button><button data-tab="text" aria-pressed="false">文字敘述差異</button></nav>
 <section id="specs-panel">
 <div class="filters"><label class="search"><span class="sr-only">搜尋規格</span><input id="search" type="search" placeholder="搜尋 symbol、Opcode、parameter 或其他欄位…"></label><label><span class="sr-only">產品</span><select id="product"><option value="">全部產品</option></select></label><label><span class="sr-only">規格類型</span><select id="kind"><option value="">全部類型</option><option>DC</option><option>AC</option><option>Command</option><option>Other</option></select></label><label><span class="sr-only">比對狀態</span><select id="status"><option value="">全部狀態</option><option value="changed">變更</option><option value="added">新增</option><option value="removed">移除</option><option value="review">待確認配對</option><option value="unchanged">未變更</option></select></label></div>
 <div id="empty" class="empty"><div class="sheet-illustration" aria-hidden="true"><div>PRODUCT　 MAX　 TYP　 MIN</div><span></span><span></span><span></span><span></span></div><h3>原本跨列的規格，攤平成清楚的每一列。</h3><p>讀取電流會依頻率分列；Chip Erase 會依產品分列。<br>先核對預覽，再匯出 Excel。</p></div>
@@ -32,6 +32,14 @@
 </section>
 <section id="review-panel" hidden><div id="review-list" class="raw-list"><p>解析後，無法可靠標準化的原表會列在這裡。</p></div></section>
 <section id="source-panel" hidden><div id="source-list" class="raw-list"><p>解析後可查看來源頁面的原文及註解。</p></div></section>
+<section id="text-panel" hidden>
+<div class="text-toolbar"><p>逐章節比對新、舊版規格書的<strong>文字敘述</strong>（段落、條列、Notes、Figure/Table 標題），不含規格表格、圖中標籤、目錄與 Revision History。請先在左側勾選「比對新舊版本」並選擇兩份 PDF。</p><div class="text-actions"><button id="text-run" type="button" class="primary">比對文字敘述</button><button id="text-cancel" type="button" hidden>取消</button><button id="text-export" type="button" disabled>下載文字差異 Excel</button></div></div>
+<p id="text-progress" class="text-progress" role="status" aria-live="polite"></p>
+<div id="text-error" class="error" role="alert" hidden></div>
+<div id="text-summary" class="text-summary" hidden></div>
+<div class="filters text-filters"><label class="search"><span class="sr-only">搜尋章節或內文</span><input id="text-search" type="search" placeholder="搜尋章節標題或內文…"></label><label><span class="sr-only">章節狀態</span><select id="text-status"><option value="diff">有差異的章節</option><option value="">全部章節</option><option value="changed">修改</option><option value="added">新增</option><option value="removed">移除</option><option value="part">僅型號替換</option><option value="same">相同</option></select></label><label class="check"><input type="checkbox" id="text-hide-part" checked>僅型號替換視為相同</label><label class="check"><input type="checkbox" id="text-only-diff" checked>只顯示差異段落</label></div>
+<div class="text-layout"><nav id="text-sections" class="text-sections" aria-label="章節清單"><p class="text-empty">尚未比對。</p></nav><article id="text-detail" class="text-detail" tabindex="-1"><p class="text-empty">選擇左側章節查看舊版／新版並排差異。</p></article></div>
+</section>
 </main></div>
 <footer class="site-footer"><span>© 2026 PP32 YPLu (Desmond Lyu). All rights reserved. Licence: MIT | Version 1.0.0</span><a href="https://github.com/desmondlyu/datasheet_to_excel" target="_blank" rel="noopener noreferrer">GitHub Repo</a></footer>
 <dialog id="detail"><div class="dialog-head"><h2>規格詳情</h2><button id="close-detail" aria-label="關閉詳情">×</button></div><div id="detail-content"></div></dialog>

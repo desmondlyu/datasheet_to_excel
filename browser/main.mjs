@@ -8,7 +8,7 @@ function clearError(){$('error').hidden=true;$('error-detail').hidden=true;$('er
 function showError(error,phase){$('error').textContent=error.message||'解析失敗，請重試。';$('error').hidden=false;$('error-report').textContent=diagnosticText(error.diagnostic||error,{phase,browser:navigator.userAgent});$('error-detail').hidden=false;}
 let result=null, page=0; const pageSize=60;
 function el(tag,text,cls){const x=document.createElement(tag);if(text!==undefined)x.textContent=text;if(cls)x.className=cls;return x;}
-function fileName(){ $('new-label').textContent=$('new-file').files[0]?.name||'選擇或拖入 PDF'; }
+function fileName(){ $('new-label').textContent=$('new-file').files[0]?.name||'選擇或拖入 PDF';textInvalidate(); }
 $('new-file').addEventListener('change',fileName);
 $('compare').addEventListener('change',()=>{$('old-area').hidden=!$('compare').checked;$('old-file').required=$('compare').checked;});
 const zone=$('drop-zone');
@@ -20,7 +20,7 @@ function busy(value){$('convert').disabled=value;$('convert').textContent=value?
 function clearResult(){result=null;page=0;render();for(const id of ['row-count','product-count','change-count','review-count'])$(id).textContent='—';$('review-list').replaceChildren();$('source-list').replaceChildren();$('file-title').textContent='選擇規格書後，在這裡核對匯出結果。';$('export-all').disabled=true;$('export-filtered').disabled=true;$('detail').close();}
 function stop(){generation++;activeWorker?.terminate();activeWorker=null;busy(false);}
 $('cancel').onclick=()=>{stop();clearResult();$('progress').textContent='已取消解析。';};
-$('clear-session').onclick=()=>{stop();clearResult();$('upload-form').reset();$('old-area').hidden=true;$('old-file').required=false;fileName();clearError();$('progress').textContent='已清除檔案與結果。PDF 不會上傳到伺服器。';};
+$('clear-session').onclick=()=>{stop();clearResult();textStop();textClear();$('upload-form').reset();$('old-area').hidden=true;$('old-file').required=false;fileName();clearError();$('progress').textContent='已清除檔案與結果。PDF 不會上傳到伺服器。';};
 $('upload-form').addEventListener('submit',async e=>{
  e.preventDefault();stop();const run=generation;let phase='讀取檔案';clearResult();clearError();busy(true);
  try{
@@ -61,3 +61,86 @@ function rawViews(){const rev=$('review-list');rev.replaceChildren();if(!result.
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));$(x.dataset.tab+'-panel').hidden=x!==b;});});
 async function download(filteredOnly){if(!result)return;const snapshot={...result,rows:filteredOnly?filtered():result.rows};try{$('export-all').disabled=true;$('export-filtered').disabled=true;const {makeWorkbook}=await import('./workbook.mjs');const bytes=await makeWorkbook(snapshot);const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=el('a');a.href=url;a.download=filteredOnly?'datasheet_specs_filtered.xlsx':'datasheet_specs.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){showError(e,'匯出 Excel');}finally{$('export-all').disabled=!result;$('export-filtered').disabled=!result;}}
 $('export-all').onclick=()=>download(false);$('export-filtered').onclick=()=>download(true);
+// ---- 文字敘述差異 ----
+let textState=null,textWorker=null,textGen=0,textLib=null,textSelected=null;
+const textBusy=v=>{$('text-run').disabled=v;$('text-run').textContent=v?'正在比對…':'比對文字敘述';$('text-cancel').hidden=!v;};
+function textStop(){textGen++;textWorker?.terminate();textWorker=null;textBusy(false);}
+function textClear(){textState=null;textSelected=null;$('text-export').disabled=true;$('text-summary').hidden=true;$('text-error').hidden=true;$('text-progress').textContent='';$('text-sections').replaceChildren(el('p','尚未比對。','text-empty'));$('text-detail').replaceChildren(el('p','選擇左側章節查看舊版／新版並排差異。','text-empty'));}
+function textInvalidate(){if(!textState&&!textWorker)return;textStop();textClear();$('text-progress').textContent='檔案已變更，請重新比對文字敘述。';}
+$('old-file').addEventListener('change',textInvalidate);$('compare').addEventListener('change',textInvalidate);
+$('text-cancel').onclick=()=>{textStop();textClear();$('text-progress').textContent='已取消文字比對。';};
+$('text-run').onclick=async()=>{
+ textStop();textClear();const run=textGen;textBusy(true);
+ try{
+  const file=$('new-file').files[0],old=$('compare').checked?$('old-file').files[0]:null;
+  if(!file||!old)throw Error('請先選擇新版 PDF，勾選「比對新舊版本」並選擇舊版 PDF。');
+  if(file.size+old.size>50*1024*1024)throw Error('PDF 合計上限為 50 MB。');
+  $('text-progress').textContent='正在讀取本機檔案…';
+  const [newData,oldData]=await Promise.all([file.arrayBuffer(),old.arrayBuffer()]);textLib??=await import('./text-diff.mjs');if(run!==textGen)return;
+  const worker=new Worker(new URL('./text-diff.worker.mjs',import.meta.url),{type:'module'});textWorker=worker;
+  const json=await new Promise((resolve,reject)=>{worker.onmessage=({data})=>{if(data.type==='progress')$('text-progress').textContent=`${data.label}：讀取頁面 ${data.current} / ${data.total}`;else if(data.type==='result')resolve(data.result);else if(data.type==='error'){const e=Error(data.message);e.diagnostic=data;reject(e);}};worker.onerror=e=>reject(Error(e.message||'文字比對程序無法啟動，請更新瀏覽器或重新載入頁面。'));worker.postMessage({newData,oldData,filename:file.name,oldFilename:old.name},[newData,oldData]);});
+  if(run!==textGen)return;
+  textState={...json,manual:new Set()};textRebuild();
+  $('text-progress').textContent=`比對完成：新版 ${json.newDoc.sections.length} 個章節（PDF ${json.newDoc.pages} 頁），舊版 ${json.oldDoc.sections.length} 個章節（PDF ${json.oldDoc.pages} 頁）。`;
+  $('text-export').disabled=false;
+ }catch(err){if(run!==textGen)return;textClear();$('text-error').textContent=err.message||'文字比對失敗。';$('text-error').hidden=false;$('text-progress').textContent='文字比對未完成。';}
+ finally{if(run===textGen){textWorker?.terminate();textWorker=null;textBusy(false);}}
+};
+const hidePart=()=>$('text-hide-part').checked;
+// With "僅型號替換視為相同", part-only differences count as same everywhere in the view.
+const shownStatus=s=>s==='part'&&hidePart()?'same':s;
+function textRebuild(){
+ const {newDoc,oldDoc,pairing}=textState,report=textLib.buildReport(oldDoc,newDoc,pairing);
+ for(const e of report){const n=newDoc.sections[e.newIndex],o=oldDoc.sections[e.oldIndex];e.label=textLib.sectionLabel(n||o);e.search=[textLib.sectionLabel(n),textLib.sectionLabel(o),...e.paragraphs.flatMap(p=>[p.old?.text,p.new?.text])].join('\n').toLowerCase();}
+ textState.report=report;textRender();
+}
+function textBadge(status){return el('span',textLib.TEXT_STATUS_LABELS[status],`text-badge s-${status}`);}
+function textRender(){
+ if(!textState)return;const {report}=textState,q=$('text-search').value.trim().toLowerCase(),want=$('text-status').value;
+ const counts={changed:0,added:0,removed:0,part:0,same:0};report.forEach(e=>counts[shownStatus(e.status)]++);
+ const sum=$('text-summary');sum.replaceChildren(...['changed','added','removed','part','same'].filter(s=>!(s==='part'&&hidePart())).map(s=>{const b=el('span',undefined,'text-count');b.append(textBadge(s),el('strong',String(counts[s])));return b;}),el('span',`章節配對 ${report.filter(e=>e.newIndex>=0&&e.oldIndex>=0).length} 組${textState.manual.size?`（手動 ${textState.manual.size}）`:''}`,'text-note'));sum.hidden=false;
+ const list=report.filter(e=>{const s=shownStatus(e.status);return (!want||(want==='diff'?s!=='same':s===want))&&(!q||e.search.includes(q));});
+ const nav=$('text-sections');nav.replaceChildren();
+ if(!list.length)nav.append(el('p','沒有符合條件的章節。','text-empty'));
+ if(!textSelected||!list.includes(textSelected))textSelected=list[0]||null;
+ for(const e of list){const b=el('button',undefined,'text-section');b.type='button';b.style.setProperty('--level',Math.max(0,(textState.newDoc.sections[e.newIndex]||textState.oldDoc.sections[e.oldIndex]).level-1));if(e===textSelected)b.setAttribute('aria-current','true');b.append(textBadge(shownStatus(e.status)),el('span',e.label,'text-section-label'));b.title=e.label;b.onclick=()=>{textSelected=e;textRender();$('text-detail').focus({preventScroll:true});};nav.append(b);}
+ textDetail();
+}
+function chunkNodes(chunks,side){
+ const out=[];
+ for(const c of chunks){
+  if(c.t==='eq')out.push(document.createTextNode(c.v));
+  else if(c.t==='del'){if(side==='old')out.push(el('del',c.v));}
+  else if(c.t==='ins'){if(side==='new')out.push(el('ins',c.v));}
+  else{const v=side==='old'?c.o:c.n;out.push(hidePart()?document.createTextNode(v):el('mark',v,'part'));}
+ }
+ return out;
+}
+function textDetail(){
+ const box=$('text-detail'),e=textSelected;box.replaceChildren();
+ if(!e){box.append(el('p','選擇左側章節查看舊版／新版並排差異。','text-empty'));return;}
+ const {newDoc,oldDoc,pairing,manual}=textState,n=newDoc.sections[e.newIndex],o=oldDoc.sections[e.oldIndex];
+ const head=el('div',undefined,'text-head');const h=el('h3');h.append(textBadge(shownStatus(e.status)),document.createTextNode(' '+e.label));head.append(h);
+ const meta=el('dl','','text-meta');
+ const titleCell=(sec,side)=>{const dd=el('dd');if(!sec){dd.textContent='（無對應章節）';return dd;}if(sec.number)dd.append(sec.number+' ');dd.append(...(e.titleChunks?chunkNodes(e.titleChunks,side):[sec.title]),` · PDF 第 ${sec.page} 頁`);return dd;};
+ meta.append(el('dt','舊版'),titleCell(o,'old'),el('dt','新版'),titleCell(n,'new'));head.append(meta);
+ // Manual pairing: pick the counterpart section; previous pairs are released automatically.
+ const pick=el('label',undefined,'text-pair');const sel=el('select');
+ const others=n?oldDoc.sections:newDoc.sections;sel.append(new Option('（無對應章節）','-1'));others.forEach((s,i)=>sel.append(new Option(textLib.sectionLabel(s).slice(0,90)+` (p.${s.page})`,String(i))));
+ sel.value=String(n?e.oldIndex:-1);
+ sel.onchange=()=>{const v=Number(sel.value);let key;if(n){if(v>=0){const k=pairing.indexOf(v);if(k>=0)pairing[k]=-1;}pairing[e.newIndex]=v;manual.add(e.newIndex);key={newIndex:e.newIndex};}else{if(v<0)return;pairing[v]=e.oldIndex;manual.add(v);key={newIndex:v};}textRebuild();textSelected=textState.report.find(x=>x.newIndex===key.newIndex)||null;textRender();};
+ pick.append(el('span',n?'對應舊版章節':'對應新版章節'),sel);if(n&&manual.has(e.newIndex))pick.append(el('small','手動配對'));head.append(pick);box.append(head);
+ const onlyDiff=$('text-only-diff').checked,rows=e.paragraphs.filter(p=>!onlyDiff||shownStatus(p.status)!=='same'),hidden=e.paragraphs.length-rows.length;
+ if(!e.paragraphs.length){box.append(el('p','此章節沒有可比對的文字敘述（可能只有表格或圖）。','text-empty'));return;}
+ const table=el('table',undefined,'text-table');const thead=el('thead'),hr=el('tr');['狀態','舊版','新版'].forEach(t=>{const th=el('th',t);th.scope='col';hr.append(th);});thead.append(hr);table.append(thead);
+ const body=el('tbody');
+ for(const p of rows){const s=shownStatus(p.status),tr=el('tr',undefined,`p-${s}`);const st=el('td');st.append(textBadge(s));
+  const cell=(side,par)=>{const td=el('td');if(!par){td.append(el('span',side==='old'?'（舊版無此段）':'（新版無此段）','text-missing'));return td;}td.append(...(p.status==='added'||p.status==='removed'?[document.createTextNode(par.text)]:chunkNodes(p.chunks,side)));td.append(el('small',` p.${par.page}`,'text-page'));return td;};
+  tr.append(st,cell('old',p.old),cell('new',p.new));body.append(tr);}
+ table.append(body);box.append(table);
+ if(hidden)box.append(el('p',`已隱藏 ${hidden} 段相同段落。取消勾選「只顯示差異段落」可顯示全部。`,'text-note'));
+ if(!rows.length)box.append(el('p','此章節沒有差異段落。','text-empty'));
+}
+for(const id of ['text-status','text-hide-part','text-only-diff'])$(id).addEventListener('change',textRender);
+$('text-search').addEventListener('input',textRender);
+$('text-export').onclick=async()=>{if(!textState)return;$('text-export').disabled=true;try{const {makeTextDiffWorkbook}=await import('./text-diff-workbook.mjs');const bytes=await makeTextDiffWorkbook({newDoc:textState.newDoc,oldDoc:textState.oldDoc,report:textState.report,filename:textState.filename,oldFilename:textState.oldFilename});const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=el('a');a.href=url;a.download='datasheet_text_diff.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(err){$('text-error').textContent='匯出 Excel 失敗：'+(err.message||err);$('text-error').hidden=false;}finally{$('text-export').disabled=!textState;}};
