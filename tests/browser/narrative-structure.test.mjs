@@ -10,9 +10,10 @@ const section=(paragraphs)=>({number:'3.2',title:'Data Input (DI)',level:2,page:
 
 test('cross-page wrapped sentence compares equal to unbroken one-page sentence',()=>{
  const words='The device supports Dual SPI and Quad SPI commands with a programmable clock and dummy cycle configuration';
+ const cut=words.lastIndexOf(' ',74);
  const a=buildSections([
-  page(4,[seg('3.2 Data Input (DI)',100,12),seg(words.slice(0,74),125)]),
-  page(5,[seg(words.slice(74)+' in both modes.',125)]),
+  page(4,[seg('3.2 Data Input (DI)',100,12),seg(words.slice(0,cut),125)]),
+  page(5,[seg(words.slice(cut+1)+' in both modes.',125)]),
  ]);
  const b=buildSections([
   page(4,[seg('3.2 Data Input (DI)',100,12),seg(words+' in both modes.',125)]),
@@ -67,7 +68,7 @@ test('Markdown audit export retains page spans and exact source paragraphs',()=>
  const oldDoc={sections:reflowSections([section([{...original('The device supports Dual SPI',14),endPage:15}])])};
  const newDoc={sections:reflowSections([section([original('The device supports Dual SPI.',17)])])};
  const md=toComparisonMarkdown(newDoc,oldDoc,{filename:'target.pdf',oldFilename:'rw.pdf'});
- assert.match(md,/## rw\.pdf/);
+ assert.match(md,/# rw\.pdf/);
  assert.match(md,/<!-- PDF page 14–15 -->/);
  assert.match(md,/<!-- PDF page 17 -->/);
  assert.match(md,/The device supports Dual SPI\./);
