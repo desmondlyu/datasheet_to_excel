@@ -24,6 +24,7 @@ function style(s,headers,wide){
  s.columns.forEach((c,i)=>{c.width=wide[headers[i]]||12;c.alignment={vertical:'top',wrapText:true};});
 }
 const fill=(row,status)=>{if(FILLS[status])row.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:FILLS[status]}};};
+const sourcePage=p=>p&&p.endPage>p.page?pageSpan(p):p?.page??null;
 // data: {newDoc, oldDoc, report, filename, oldFilename}
 export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',oldFilename=''}){
  const book=new ExcelJS.Workbook();book.creator='Datasheet 規格工作台';
@@ -34,7 +35,7 @@ export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',old
   const srow=sections.addRow([TEXT_STATUS_LABELS[e.status],cut(sectionLabel(n))||null,cut(sectionLabel(o))||null,n?.page??null,o?.page??null,e.counts.same,e.counts.part,e.counts.changed,e.counts.added,e.counts.removed]);fill(srow,e.status);
   if(e.titleChunks){const r=diff.addRow([e.titleChunks.some(c=>c.t==='del'||c.t==='ins')?TEXT_STATUS_LABELS.changed:TEXT_STATUS_LABELS.part,cut(sectionLabel(n)),cut(sectionLabel(o)),n.page,o.page,null,cut(o.title),cut(n.title)]);r.getCell(6).value=richDiff([{t:'eq',v:'〔章節標題〕'},...e.titleChunks]);fill(r,e.titleChunks.some(c=>c.t==='del'||c.t==='ins')?'changed':'part');}
   for(const p of e.paragraphs){
-   const r=diff.addRow([TEXT_STATUS_LABELS[p.status],cut(sectionLabel(n))||null,cut(sectionLabel(o))||null,pageSpan(p.new)||null,pageSpan(p.old)||null,null,p.old?cut(p.old.text):null,p.new?cut(p.new.text):null]);
+   const r=diff.addRow([TEXT_STATUS_LABELS[p.status],cut(sectionLabel(n))||null,cut(sectionLabel(o))||null,sourcePage(p.new),sourcePage(p.old),null,p.old?cut(p.old.text):null,p.new?cut(p.new.text):null]);
    r.getCell(6).value=p.status==='same'?null:richDiff(p.chunks);fill(r,p.status);
   }
  }
