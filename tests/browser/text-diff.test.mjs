@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import ExcelJS from 'exceljs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import {buildSections,compareSection,diffWords,pairSections,buildReport,summarize,extractNarrative} from '../../browser/text-diff.mjs';
+import {buildSections,compareSection,diffWords,pairSections,buildReport,summarize,extractNarrative,tocEntries} from '../../browser/text-diff.mjs';
 import {makeTextDiffWorkbook,TEXT_DIFF_SHEET,TEXT_SECTION_SHEET,TEXT_DIFF_HEADERS} from '../../browser/text-diff-workbook.mjs';
 
 const sec=(number,title,...texts)=>({number,title,level:number.split('.').length,page:1,printed:1,paragraphs:texts.map(text=>({text,page:1,printed:1,kind:'text'}))});
@@ -24,6 +24,33 @@ test('sections: numbered headings, paragraph breaks, small drawing labels and re
  assert.deepEqual(doc.sections.map(s=>[s.number,s.title]),[['1','GENERAL DESCRIPTIONS'],['2.1','Pin Configuration SOP']]);
  assert.deepEqual(doc.sections[0].paragraphs.map(p=>p.text),['The W25Q51MV is a serial flash.','Long line of text that continues across the whole column width onto the next line.']);
  assert.equal(doc.sections[0].paragraphs[0].page,3);
+});
+
+test('sections: TOC entries identify body-size sub-headings and bound large heading titles',()=>{
+ const body='Body text long enough to dominate the measured body height of this page.';
+ const doc=buildSections([
+  {n:2,printed:1,width:612,segments:[],toc:true,entries:tocEntries([seg('3.1 Chip Select (/CS) ............ 12',106,500,100,8),seg('6.1 Device ID and Instruction Set Tables ...... 61',106,500,112,8)])},
+  {n:3,printed:2,width:612,segments:[
+   seg('3 PIN DESCRIPTIONS',72,250,100,12),
+   seg('3.1 Chip Select (/CS)',72,180,120),
+   seg(body,72,540,140),
+   seg('6.1 Device ID and Instruction Set Tables',72,300,180,11),
+   seg('Manufacturer and Device Identification',72,280,195,11),
+   seg(body,72,540,230),
+  ]}]);
+ assert.deepEqual(doc.sections.map(s=>[s.number,s.title]),[['3','PIN DESCRIPTIONS'],['3.1','Chip Select (/CS)'],['6.1','Device ID and Instruction Set Tables']]);
+ assert.deepEqual(doc.sections[2].paragraphs.map(p=>p.text),['Manufacturer and Device Identification',body]);
+});
+
+test('paragraph alignment merges a paragraph split by layout in only one revision',()=>{
+ const a='When this bit is set to 0, the Password Protection Mode Lock is enabled.',b='LR6 will change from lock function to status function.';
+ const same=compareSection(sec('5.6.6','Lock Register',`${a} ${b}`),sec('5.6.6','Lock Register',a,b));
+ assert.equal(same.status,'same');assert.deepEqual(same.paragraphs.map(p=>p.status),['same']);
+ const edited=compareSection(sec('5.6.6','Lock Register',a,`${b} Extra words.`),sec('5.6.6','Lock Register',`${a} ${b}`));
+ assert.deepEqual(edited.paragraphs.map(p=>p.status),['changed']);
+ assert.equal(edited.paragraphs[0].chunks.filter(c=>c.t!=='eq').map(c=>c.t+':'+c.v.trim()).join('|'),'del:Extra words.');
+ const real=compareSection(sec('1','A','Alpha beta gamma delta.'),sec('1','A','Alpha beta gamma delta epsilon.','Totally new paragraph about interrupts.'));
+ assert.deepEqual(real.paragraphs.map(p=>p.status),['changed','added']);
 });
 
 test('paragraph diff: spacing and hyphenation splits are equal, part numbers are separate, words are marked',()=>{
@@ -82,4 +109,16 @@ test('private W25Q51MV vs W25Q51RW narrative comparison',{skip:!(newPdf&&oldPdf)
  assert.ok(wp.paragraphs[0].chunks.some(c=>c.t==='ins'&&c.v.includes('Figure 2.x')));
  assert.equal(find('3.9','Reset Output (/RSTO)').status,'added');
  const pw=find('5.5.1','Write Password');assert.equal(oldDoc.sections[pw.oldIndex].number,'5.6.1');assert.equal(pw.status,'same');
+});
+
+const agNew=process.env.SPEC_TEXT_AG_NEW_PDF,agOld=process.env.SPEC_TEXT_AG_OLD_PDF;
+test('private W25HxxRW AG Rev 0.5 vs Rev 0.4: layout-only differences are not reported',{skip:!(agNew&&agOld),timeout:180000},async()=>{
+ const newDoc=await extractNarrative(pdfjs,await readFile(agNew)),oldDoc=await extractNarrative(pdfjs,await readFile(agOld));
+ const report=buildReport(oldDoc,newDoc,pairSections(oldDoc.sections,newDoc.sections));
+ const find=number=>report.find(e=>newDoc.sections[e.newIndex]?.number===number);
+ for(const n of ['3.1','3.2','4','5.3','5.6.6'])assert.equal(find(n).status,'same',n);
+ assert.equal(oldDoc.sections[find('3.1').oldIndex].number,'3.1');
+ assert.equal(newDoc.sections.find(s=>s.number==='6.3.73').title,'Enable Non-Volatile Individual Block Protection Register (E3h)');
+ assert.ok(![...oldDoc.sections,...newDoc.sections].some(s=>s.paragraphs.some(p=>/Publication Release Date/.test(p.text))));
+ assert.equal(find('5.8.2').status,'changed');
 });
