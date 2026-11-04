@@ -62,28 +62,60 @@ export async function extractNarrative(pdfjs,data,{onProgress=()=>{}}={}){
  try{doc=await task.promise;}catch(e){if(/password|destroyed/i.test(e.message))throw Error('PDF 可能受密碼保護，請先解除保護後再試。');throw Error('無法讀取 PDF，請確認檔案完整且為有效的 PDF。');}
  try{
   if(doc.numPages>600)throw Error('目前每份 PDF 上限為 600 頁。');
-  const pages=[];
+  const pages=[],toc=[],footerKeys=new Set(),footerKey=s=>compactKey(s).replace(/\d+/g,'#');
+  let listed=tocLookup(toc);
   for(let n=1;n<=doc.numPages;n++){
    onProgress({stage:'text',current:n,total:doc.numPages});
    const page=await doc.getPage(n),viewport=page.getViewport({scale:1});
    const all=textItems(await getPageTextContent(page),viewport),top=viewport.height*.09,bottom=viewport.height*.92;
-   const footer=segmentsOf(all.filter(t=>t.y>=bottom)).map(s=>s.text).join(' ');
+   const footerSegs=segmentsOf(all.filter(t=>t.y>=bottom));footerSegs.forEach(s=>footerKeys.add(footerKey(s.text)));
+   const footer=footerSegs.map(s=>s.text).join(' ');
    const printed=Number(footer.match(/(?:^|\s)-\s*(\d+)\s*-/)?.[1]??footer.match(/(?:^|\s)(\d+)\s+\D/)?.[1]??n);
    let items=all.filter(t=>t.y>top&&t.y<bottom);
    const raw=segmentsOf(items);
-   if(raw.filter(s=>LEADER.test(s.text)).length>=4){pages.push({n,printed,width:viewport.width,segments:[],toc:true});page.cleanup();continue;}
+   if(raw.filter(s=>LEADER.test(s.text)).length>=4){const entries=tocEntries(raw);toc.push(...entries);listed=tocLookup(toc);pages.push({n,printed,width:viewport.width,segments:[],toc:true,entries});page.cleanup();continue;}
    const tables=groupTables(findCells(rulingLines(await page.getOperatorList(),pdfjs.OPS,viewport)));
-   if(tables.length){items=items.filter(t=>{const cx=t.x+t.width/2;return !tables.some(({bbox:b})=>cx>=b[0]-1&&cx<=b[2]+1&&t.y>=b[1]-1&&t.y<=b[3]+1);});}
-   pages.push({n,printed,width:viewport.width,segments:segmentsOf(items),tables:tables.length});
+   if(tables.length){
+    const hit=(t,b)=>{const cx=t.x+t.width/2;return cx>=b[0]-1&&cx<=b[2]+1&&t.y>=b[1]-1&&t.y<=b[3]+1;};
+    const oversized=b=>b[0]<-5||b[1]<-5||b[2]>viewport.width+5||b[3]>viewport.height+5;
+    // Drawings can be detected as "tables". Keep headings listed in the TOC, and lines that start
+    // left of a mis-scaled (oversized) box.
+    items=items.filter(t=>{
+     const boxes=tables.filter(({bbox:b})=>hit(t,b));if(!boxes.length)return true;
+     const line=items.filter(u=>Math.abs(u.y-t.y)<3).sort((a,b)=>a.x-b.x),m=joinItems(line).match(HEADING);
+     if(m&&listed(m[1],m[2]))return true;
+     return boxes.every(({bbox:b})=>oversized(b)&&line[0].x<b[0]-1);
+    });
+   }
+   // Landscape pages place the running footer above the usual bottom band.
+   let segments=segmentsOf(items);const low=s=>s.y>viewport.height*.8;
+   if(segments.some(s=>low(s)&&footerKeys.has(footerKey(s.text))))segments=segments.filter(s=>!(low(s)&&(footerKeys.has(footerKey(s.text))||/^[-\s\d]+$/.test(s.text))));
+   pages.push({n,printed,width:viewport.width,segments,tables:tables.length});
    page.cleanup();
   }
   return buildSections(pages);
  }finally{await task.destroy();}
 }
 
+// "3.1 Chip Select (/CS) ........ 12" -> {number:'3.1',title:'Chip Select (/CS)'}
+export function tocEntries(segments){
+ const out=[];
+ for(const s of segments){const m=s.text.match(/^(\d{1,2}(?:\.\d{1,3}){0,5})\.?\s*(.*)$/);if(!m)continue;const title=m[2].split(LEADER)[0].replace(/[.\s]*\d*\s*$/,'').trim();if(/[A-Za-z]/.test(title))out.push({number:m[1],title});}
+ return out;
+}
+
+// Returns (number,title)=>full TOC title key when the heading start matches a TOC entry.
+function tocLookup(entries){
+ const toc=new Map();
+ for(const e of entries){if(!toc.has(e.number))toc.set(e.number,[]);toc.get(e.number).push(titleKey(e.title));}
+ return (number,title)=>{const k=titleKey(title);return k.length>=3?toc.get(number)?.find(t=>t.startsWith(k))??null:null;};
+}
+
 // Separate from PDF access so the sectioning rules can be tested with plain segments.
 export function buildSections(pages){
  const body=bodyHeight(pages),minor=body*.9,headingMin=body+.8;
+ // Some revisions print sub-headings at body size; the table of contents still identifies them.
+ const tocTitle=tocLookup(pages.flatMap(p=>p.entries||[]));
  const sections=[];let current={number:'',title:'(封面與前言)',level:0,page:pages[0]?.n||1,printed:pages[0]?.printed||1,paragraphs:[]};sections.push(current);
  let excludedLevel=null,para=null,prev=null;
  const close=()=>{if(para){para.text=para.text.replace(/\s+/g,' ').trim();if(para.text&&excludedLevel===null)current.paragraphs.push(para);}para=null;};
@@ -94,9 +126,12 @@ export function buildSections(pages){
   const rightEdge={false:edge(false),true:edge(true)};
   for(let i=0;i<segs.length;i++){
    const s=segs[i],m=s.text.match(HEADING);
-   if(m&&s.h>=headingMin&&s.x0<p.width*.3&&/[A-Za-z]/.test(m[2])){
+   const big=m&&s.h>=headingMin,listed=m?tocTitle(m[1],m[2]):null;
+   if((big||listed)&&s.x0<p.width*.3&&/[A-Za-z]/.test(m[2])){
     close();let title=m[2];
-    while(segs[i+1]&&segs[i+1].h>=headingMin&&!HEADING.test(segs[i+1].text)&&segs[i+1].y-segs[i].y<s.h*1.9){i++;title+=' '+segs[i].text;}
+    // A listed title stops where the TOC title stops, so large body text is not absorbed.
+    const more=t=>listed!==null?(k=>k.length<=listed.length&&listed.startsWith(k))(titleKey(title+' '+t.text)):t.h>=headingMin;
+    while(segs[i+1]&&more(segs[i+1])&&!HEADING.test(segs[i+1].text)&&segs[i+1].y-segs[i].y<s.h*1.9){i++;title+=' '+segs[i].text;}
     const level=m[1].split('.').length;
     if(excludedLevel!==null&&level<=excludedLevel)excludedLevel=null;
     if(excludedLevel===null&&EXCLUDED_CHAPTER.test(title))excludedLevel=level;
@@ -168,6 +203,22 @@ export function alignParagraphs(oldP,newP,threshold=.35){
  };
  for(const [,i,j] of anchors){gap(ia,i,ib,j);out.push(pairParagraph(oldP[i],newP[j]));ia=i+1;ib=j+1;}
  gap(ia,oldP.length,ib,newP.length);
+ return mergeSplitParagraphs(out);
+}
+const diffCost=r=>r.status==='same'?0:(!r.old||!r.new)?compactKey((r.old||r.new).text).length:r.chunks.reduce((n,c)=>n+(c.t==='del'||c.t==='ins'?compactKey(c.v).length:0),0);
+const joinParagraph=(a,b)=>!a?b:!b?a:{...a,text:a.text+' '+b.text};
+// Layout can split one paragraph into two in only one revision ("…bits. LR6 will change…").
+// Merge a paired row with an adjacent one-sided row when that shrinks the diff.
+function mergeSplitParagraphs(rows){
+ const out=[];
+ for(const r of rows){
+  const last=out[out.length-1];
+  if(last&&last.status!=='same'&&r.status!=='same'&&((last.old&&last.new)||(r.old&&r.new))&&(!last.old||!last.new||!r.old||!r.new)){
+   const merged=pairParagraph(joinParagraph(last.old,r.old),joinParagraph(last.new,r.new));
+   if(diffCost(merged)<diffCost(last)+diffCost(r)){out[out.length-1]=merged;continue;}
+  }
+  out.push(r);
+ }
  return out;
 }
 export function compareSection(oldSec,newSec){
