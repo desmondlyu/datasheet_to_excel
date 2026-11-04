@@ -4,6 +4,7 @@
 // revision history. Comparison is deterministic text diff, never AI rewriting.
 import {textItems,rulingLines,findCells,groupTables} from './geometry.mjs';
 import {getPageTextContent} from './pdf-text.mjs';
+import {endsSentence,joinWrappedText,reflowSections} from './narrative-structure.mjs';
 
 export const TEXT_STATUS_LABELS={same:'相同',part:'僅型號替換',changed:'修改',added:'新增',removed:'移除'};
 // Some PDFs drop the space after the number ("2.1Pin Configuration").
@@ -142,16 +143,19 @@ export function buildSections(pages){
    const caption=CAPTION.test(s.text),list=LIST_START.test(s.text);
    let fresh=!para||caption||list||para.kind==='caption';
    if(!fresh&&prev){
-    if(prev.page!==p.n)fresh=/[.:;!?]$/.test(para.text)||!/^[a-z(]/.test(s.text);
+    if(prev.page!==p.n)fresh=endsSentence(para.text); // A page boundary alone cannot split a sentence.
     else{const short=prev.s.x1<rightEdge[prev.s.x0>=mid-5]-35;fresh=(short&&/[.:!?]$/.test(prev.s.text))||s.y-prev.s.y>s.h*2.4||s.y<prev.s.y;}
    }
    if(fresh){close();para={text:s.text,page:p.n,printed:p.printed,kind:caption?'caption':list?'list':'text'};}
-   else para.text+=' '+s.text;
+   else {
+    para.text=joinWrappedText(para.text,s.text);
+    if(p.n!==para.page){para.endPage=p.n;para.endPrinted=p.printed;}
+   }
    prev={s,page:p.n};
   }
  }
  close();
- return {sections:sections.filter((s,i)=>i>0||s.paragraphs.length),bodyHeight:body,pages:pages.length,tocPages:pages.filter(p=>p.toc).map(p=>p.n)};
+ return {sections:reflowSections(sections.filter((s,i)=>i>0||s.paragraphs.length)),bodyHeight:body,pages:pages.length,tocPages:pages.filter(p=>p.toc).map(p=>p.n)};
 }
 
 function lcs(a,b,eq){

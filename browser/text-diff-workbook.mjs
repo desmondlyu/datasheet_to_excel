@@ -2,6 +2,7 @@
 // existing spec export is unchanged.
 import ExcelJS from 'exceljs';
 import {TEXT_STATUS_LABELS,sectionLabel} from './text-diff.mjs';
+import {pageSpan} from './narrative-structure.mjs';
 export const TEXT_DIFF_SHEET='文字差異';
 export const TEXT_SECTION_SHEET='章節總覽';
 export const TEXT_DIFF_HEADERS=['比較結果','新版章節','舊版章節','新版 PDF 頁','舊版 PDF 頁','差異標示（紅刪除線＝舊版／綠底線＝新版）','舊版原文','新版原文'];
@@ -23,6 +24,7 @@ function style(s,headers,wide){
  s.columns.forEach((c,i)=>{c.width=wide[headers[i]]||12;c.alignment={vertical:'top',wrapText:true};});
 }
 const fill=(row,status)=>{if(FILLS[status])row.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:FILLS[status]}};};
+const sourcePage=p=>p&&p.endPage>p.page?pageSpan(p):p?.page??null;
 // data: {newDoc, oldDoc, report, filename, oldFilename}
 export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',oldFilename=''}){
  const book=new ExcelJS.Workbook();book.creator='Datasheet 規格工作台';
@@ -33,7 +35,7 @@ export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',old
   const srow=sections.addRow([TEXT_STATUS_LABELS[e.status],cut(sectionLabel(n))||null,cut(sectionLabel(o))||null,n?.page??null,o?.page??null,e.counts.same,e.counts.part,e.counts.changed,e.counts.added,e.counts.removed]);fill(srow,e.status);
   if(e.titleChunks){const r=diff.addRow([e.titleChunks.some(c=>c.t==='del'||c.t==='ins')?TEXT_STATUS_LABELS.changed:TEXT_STATUS_LABELS.part,cut(sectionLabel(n)),cut(sectionLabel(o)),n.page,o.page,null,cut(o.title),cut(n.title)]);r.getCell(6).value=richDiff([{t:'eq',v:'〔章節標題〕'},...e.titleChunks]);fill(r,e.titleChunks.some(c=>c.t==='del'||c.t==='ins')?'changed':'part');}
   for(const p of e.paragraphs){
-   const r=diff.addRow([TEXT_STATUS_LABELS[p.status],cut(sectionLabel(n))||null,cut(sectionLabel(o))||null,p.new?.page??null,p.old?.page??null,null,p.old?cut(p.old.text):null,p.new?cut(p.new.text):null]);
+   const r=diff.addRow([TEXT_STATUS_LABELS[p.status],cut(sectionLabel(n))||null,cut(sectionLabel(o))||null,sourcePage(p.new),sourcePage(p.old),null,p.old?cut(p.old.text):null,p.new?cut(p.new.text):null]);
    r.getCell(6).value=p.status==='same'?null:richDiff(p.chunks);fill(r,p.status);
   }
  }
@@ -47,8 +49,8 @@ export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',old
   ['僅型號替換','差異只在產品型號（例如 W25QxxRW → W25QxxMV/MW/MY），文字其餘相同。'],
   ['修改','同一段落有字詞增刪；「差異標示」欄的紅色刪除線為舊版文字，綠色底線為新版文字，藍色為型號替換。'],
   ['新增 / 移除','只出現在新版或舊版的段落或章節。'],
-  ['頁次','「PDF 頁」為 PDF 檔案的實際頁次，可能與頁尾印刷頁碼不同。'],
-  ['限制','PDF 文字抽取依版面推斷段落；換頁、雙欄或圖文混排處可能切段不同，請以原始 PDF 為準。單一儲存格超過 32,000 字元時會截斷。']].forEach(r=>info.addRow(r));
+  ['頁次','「PDF 頁」為 PDF 檔案的實際頁次，可能與頁尾印刷頁碼不同。跨頁段落顯示起訖頁，例如 14–15。'],
+  ['限制','比對前會將跨頁與不同排版的文字整理成句子，但 PDF 原始閱讀順序、圖文混排仍可能造成誤判，請核對原始 PDF。原始章節預處理結果可匯出 Markdown；單一儲存格超過 32,000 字元時會截斷。']].forEach(r=>info.addRow(r));
  info.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};info.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF17483F'}};info.getColumn(2).alignment={wrapText:true,vertical:'top'};
  return book.xlsx.writeBuffer();
 }
