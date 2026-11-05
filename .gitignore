@@ -8,3 +8,24 @@ __pycache__/
 
 node_modules/
 dist/
+
+# Legacy Python tools (not needed for GitHub Pages; kept locally only)
+/app.py
+/extraction_core.py
+/pdf_to_excel.py
+/spec_service.py
+/requirements-web.txt
+/start-web.bat
+/web/
+/tests/*.py
+
+# Local notes and AI/agent tool artifacts
+/Old.md
+/new.md
+.playwright-mcp/
+.superpowers/
+.worktrees/
+.agents/
+.gemini/
+.codebase*/
+docs/superpowers/

@@ -113,7 +113,7 @@ SPEC_COMMAND_REFERENCE_DIR=/absolute/path/pdf-and-template-directory npm test
 
 ## 舊版 Python 工具
 
-原 PyQt 桌面版與 Flask 本機版保留供比對或舊流程使用，不是 GitHub Pages 的執行依賴。
+原 PyQt 桌面版與 Flask 本機版不是 GitHub Pages 的執行依賴，已不再隨 repo 提交（列於 `.gitignore`）。舊版檔案只保留在原開發者本機；需要時可由 Git 歷史（commit `6cacb0a` 以前）取回。
 
 - 桌面版：安裝 `PyQt6 pdfplumber pandas openpyxl`，執行 `python pdf_to_excel.py`。
 - Flask 版：`python -m pip install -r requirements-web.txt`，執行 `python app.py`，開啟 `http://127.0.0.1:8000`。Windows 也可執行 `start-web.bat`。
