@@ -30,7 +30,9 @@ export function splitSentences(input){
  const out=[];let begin=0;
  for(let i=0;i<text.length;i++){
   if(!SENTENCE_END.test(text[i]))continue;
-  if(!/\s/.test(text[i+1]??''))continue;
+  // Some revisions drop the space after a period ("Register.A Write", "'1'.If").
+  const glued=/[a-z'’"”)]/.test(text[i-1]??'')&&/^[A-Z](?:[a-z]|\s)/.test(text.slice(i+1,i+3));
+  if(!/\s/.test(text[i+1]??'')&&!glued)continue;
   const left=text.slice(begin,i+1);
   if(text[i]==='.'&&ABBREVIATION.test(left))continue;
   const rest=text.slice(i+1).trimStart();

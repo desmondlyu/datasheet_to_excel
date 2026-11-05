@@ -23,15 +23,20 @@ export function normalizeText(s){
   .replace(/[\u2010-\u2015\u2212]/g,'-').replace(/[\u00a0\u2000-\u200b\u3000]/g,' ')
   .replace(/\s+/g,' ').trim();
 }
-export const compactKey=s=>normalizeText(s).replace(/\s+/g,'');
+// Line-wrap hyphens differ by revision ("double-buffering" / "doublebuffering"), so
+// a hyphen between lowercase letters is ignored when deciding equality.
+const unwrap=s=>s.replace(/\s+/g,'').replace(/([a-z])-(?=[a-z])/g,'$1');
+export const compactKey=s=>unwrap(normalizeText(s));
 export const maskParts=s=>normalizeText(s).replace(PART,'⟨PART⟩');
-const maskedKey=s=>maskParts(s).replace(/\s+/g,'');
+const maskedKey=s=>unwrap(maskParts(s));
 const titleKey=s=>maskParts(s).toLowerCase().replace(/[^a-z0-9⟨⟩]+/g,'');
 const words=s=>new Set(maskParts(s).toLowerCase().match(/[a-z0-9⟨⟩]+/g)||[]);
 export function similarity(a,b){const x=words(a),y=words(b);if(!x.size&&!y.size)return 1;let common=0;for(const w of x)if(y.has(w))common++;return 2*common/(x.size+y.size);}
 
 function joinItems(items){let s='',prev=null;for(const t of items){const gap=prev?t.x-(prev.x+prev.width):0;s+=(prev&&gap>Math.min(t.height,prev.height)*.18?' ':'')+t.text;prev=t;}return s.replace(/\s+/g,' ').trim();}
 // Group items into lines, then split a line where a wide horizontal gap separates columns.
+// A bullet after a smaller gap also starts a new column ("Read (4)   – 64-Bit Unique ID").
+const BULLET=/^[•●▪◦■□➢►‣∙·–—]/;
 export function segmentsOf(items,gapLimit=24){
  const lines=[];
  for(const t of [...items].sort((a,b)=>a.y-b.y||a.x-b.x)){let line=null;for(let i=lines.length-1;i>=0;i--)if(Math.abs(lines[i].y-t.y)<3){line=lines[i];break;}if(!line){line={y:t.y,items:[]};lines.push(line);}line.items.push(t);}
@@ -39,7 +44,7 @@ export function segmentsOf(items,gapLimit=24){
  for(const line of lines){
   const sorted=line.items.sort((a,b)=>a.x-b.x);let group=[];
   const flush=()=>{if(!group.length)return;const text=joinItems(group);if(text)segments.push({text,x0:group[0].x,x1:Math.max(...group.map(t=>t.x+t.width)),y:line.y,h:Math.max(...group.map(t=>t.height))});group=[];};
-  for(const t of sorted){const prev=group[group.length-1];if(prev&&t.x-(prev.x+prev.width)>gapLimit&&!NUMBER_ONLY.test(joinItems(group)))flush();group.push(t);}
+  for(const t of sorted){const prev=group[group.length-1],gap=prev?t.x-(prev.x+prev.width):0;if(prev&&(gap>gapLimit||(gap>t.height*1.2&&BULLET.test(t.text)))&&!NUMBER_ONLY.test(joinItems(group)))flush();group.push(t);}
   flush();
  }
  return segments;
