@@ -9,6 +9,7 @@
   - `SPEC_REFERENCE_PDF`
   - `SPEC_TEXT_NEW_PDF`（新版，例如 `Target W25Q51MV_MW_MY-DTR_Rev_A1 06152026.pdf`）
   - `SPEC_TEXT_OLD_PDF`（舊版，例如 `W25Q32_64_12_25_51_01_02RW-DTR_RevD3 09092026.pdf`）
+  - `SPEC_TEXT_AG_NEW_PDF`／`SPEC_TEXT_AG_OLD_PDF`（`W25H32_64_12_25_51_01_02RW-DTR Preliminary AG Rev 0.5 101626.pdf`／`… Rev 0.4 092226.pdf`，同產品改版、應只剩真實修改）
 - **注意**：`core.autocrlf=true`，檔案使用 CRLF、無 BOM；PowerShell `Add-Content` 會混入 LF，寫入後需正規化。Playwright 暫存檔 `.playwright-mcp\` 不可提交。
 
 ## 文字敘述差異（2026-11-04）
@@ -40,6 +41,29 @@
   - 功能 commit `404a1f1`（`feat/narrative-text-diff`）。
   - merge commit `b81a35b` 已合併到 `master`，並已推送到 `origin/master` 與 `origin/feat/narrative-text-diff`（2026-11-04）。
 
+## 文字差異雜訊修正（2026-11-05）
+
+- 版面誤報修正（`43f4299`／merge `e18c89a`）：
+  - TOC 列出的標題可辨識為小標題。
+  - 頁尾（Publication Release Date）會被過濾。
+  - 過大的表格會被過濾。
+  - `mergeSplitParagraphs` 只合併相鄰的「配對列 + 單邊列」，而且只在 diff 成本變低時才合併。
+- 雲端 `2837b12`（Desmond Lyu）新增 `browser/narrative-structure.mjs`：
+  - `reflowSections`：跨頁段落重排。
+  - `splitSentences`：差異列改成「一句一列」。
+  - `pageSpan`：記錄頁碼範圍。
+  - 新增「下載預處理 Markdown」。
+- REA 靜態分析（`analyze_javascript_application`）確認資料流：worker → `extractNarrative` → `segmentsOf` → `buildSections` → `reflowSections`／`splitSentences` → `alignParagraphs` → `mergeSplitParagraphs` → Excel／Markdown。
+- 依分析結果再優化：
+  - `text-diff.mjs` 新增 `unwrap`：`compactKey`／`maskedKey` 忽略小寫字母之間的換行連字號（`double-buffering` 視同 `doublebuffering`）；`Quad-SPI` 這類大寫或數字旁的連字號仍算差異。
+  - `segmentsOf`：項目符號（`–`、`•` 等）前的空隙大於 1.2 倍字高時，切成新的一欄，修正 1 FEATURE 雙欄項目被合併的問題。
+  - `splitSentences`：句點後沒有空格時也能切句（例如 `Register.A`、`'1'.If`）；`e.g.`、`Rev.`、`2.1` 不切。
+- 效果（AG Rev0.5 vs 0.4）：修改 38→33、新增 6→4、刪除 5→4。剩下的差異看起來都是真實改版。
+- 私有測試 W25Q51 3.3 改成依內容找 `Figure 2.x` 那一列，因為改成一句一列後位置不固定。
+- 驗證：`npm test` 含 4 個私有 PDF，共 109 項，102 通過、0 失敗、7 略過；`npm run build` 成功。
+- 已知限制：舊版 PDF 的萃取瑕疵（例如 `8-p 0.13"ad`）會被算成修改。
+
 ## 跨 Session reference（最多 3 筆）
 
 1. 2026-11-04 Copilot CLI session `ed086d40-3972-47b7-bdaf-c8445673f34c`：文字敘述差異分頁實作、計畫文件與本機合併。
+2. 2026-11-05 Copilot CLI session `5adf4d1b-c445-433b-a7c7-6cf511e37ff8`：版面誤報修正、拉取雲端重排、REA 分析與雜訊優化。

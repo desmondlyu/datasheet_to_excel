@@ -62,6 +62,10 @@ test('soft line-wrap repair and complete sentence boundaries are conservative',(
  assert.deepEqual(splitSentences('This is Rev. A, e.g. the revision is different. The rest is unchanged.'),[
   'This is Rev. A, e.g. the revision is different.','The rest is unchanged.'
  ]);
+ // Some revisions drop the space after a period; split there too, but not inside numbers.
+ assert.deepEqual(splitSentences("Write the Lock Register.A Write Enable is required. LR6 is restored to '1'.If no password is set, see Figure 2.1 for details."),[
+  'Write the Lock Register.','A Write Enable is required.',"LR6 is restored to '1'.",'If no password is set, see Figure 2.1 for details.'
+ ]);
 });
 
 test('Markdown audit export retains page spans and exact source paragraphs',()=>{

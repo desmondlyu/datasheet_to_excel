@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import ExcelJS from 'exceljs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import {buildSections,compareSection,diffWords,pairSections,buildReport,summarize,extractNarrative,tocEntries} from '../../browser/text-diff.mjs';
+import {buildSections,compareSection,diffWords,pairSections,buildReport,summarize,extractNarrative,tocEntries,segmentsOf} from '../../browser/text-diff.mjs';
 import {makeTextDiffWorkbook,TEXT_DIFF_SHEET,TEXT_SECTION_SHEET,TEXT_DIFF_HEADERS} from '../../browser/text-diff-workbook.mjs';
 
 const sec=(number,title,...texts)=>({number,title,level:number.split('.').length,page:1,printed:1,paragraphs:texts.map(text=>({text,page:1,printed:1,kind:'text'}))});
@@ -64,6 +64,17 @@ test('paragraph diff: spacing and hyphenation splits are equal, part numbers are
  assert.deepEqual(diffWords('1μs, this','1μS, this').filter(x=>x.t!=='eq'),[{t:'del',v:'1μs, '},{t:'ins',v:'1μS, '}]);
 });
 
+test('paragraph diff: line-wrap hyphens inside lowercase words are equal, other hyphens still count',()=>{
+ assert.equal(compareSection(sec('5.9','A','This double-buffering scheme uses read-modifywrite.'),sec('5.9','A','This doublebuffering scheme uses read-modify-write.')).status,'same');
+ assert.deepEqual(diffWords('Quad-SPI mode','QuadSPI mode').filter(x=>x.t!=='eq').map(x=>x.t),['del','ins']);
+});
+
+test('segments: a bullet after a moderate gap starts a new column segment',()=>{
+ const it=(text,x,width)=>({text,x,width,y:524,height:9});
+ assert.deepEqual(segmentsOf([it('Read',262,23),it('(4)',287,12),it('–',318,5),it('64-Bit Unique ID',326,120)]).map(s=>s.text),['Read (4)','– 64-Bit Unique ID']);
+ assert.deepEqual(segmentsOf([it('Volatile',100,40),it('–',143,5),it('Writable',150,40)]).map(s=>s.text),['Volatile – Writable']);
+});
+
 test('paragraph alignment keeps order and reports inserted and removed paragraphs',()=>{
  const c=compareSection(sec('1','A','Alpha beta gamma delta.','Removed paragraph only in old.','Epsilon zeta eta theta.'),sec('1','A','Alpha beta gamma delta.','Brand new paragraph about interrupts.','Epsilon zeta eta theta iota.'));
  assert.deepEqual(c.paragraphs.map(p=>p.status).sort(),['added','changed','removed','same']);
@@ -106,7 +117,9 @@ test('private W25Q51MV vs W25Q51RW narrative comparison',{skip:!(newPdf&&oldPdf)
  assert.equal(oldDoc.sections[find('6.3.5','Write Status Register-1').oldIndex].number,'6.3.5');
  assert.equal(find('5.1.2','Dual SPI Instructions').status,'part');
  const wp=find('3.3','Write Protect');assert.equal(wp.status,'changed');
- assert.ok(wp.paragraphs[0].chunks.some(c=>c.t==='ins'&&c.v.includes('Figure 2.x')));
+ // Rows are sentence-level after reflow, so the edit is located by content rather than position.
+ const fig=wp.paragraphs.find(p=>p.chunks.some(c=>c.t==='ins'&&c.v.includes('Figure 2.x')));
+ assert.ok(fig);assert.equal(fig.status,'changed');assert.ok(fig.chunks.some(c=>c.t==='del'&&c.v.includes('section 2')));
  assert.equal(find('3.9','Reset Output (/RSTO)').status,'added');
  const pw=find('5.5.1','Write Password');assert.equal(oldDoc.sections[pw.oldIndex].number,'5.6.1');assert.equal(pw.status,'same');
 });
