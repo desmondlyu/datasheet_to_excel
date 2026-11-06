@@ -17,10 +17,10 @@ zone.addEventListener('dragleave',()=>zone.classList.remove('drag'));
 zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag');if(e.dataTransfer.files.length){const dt=new DataTransfer();dt.items.add(e.dataTransfer.files[0]);$('new-file').files=dt.files;fileName();}});
 let activeWorker=null, generation=0;
 function busy(value){$('convert').disabled=value;$('convert').textContent=value?'正在解析…':'解析並預覽';$('cancel').hidden=!value;document.body.classList.toggle('busy',value);}
-function clearResult(){result=null;page=0;render();for(const id of ['row-count','product-count','change-count','review-count'])$(id).textContent='—';$('review-list').replaceChildren();$('source-list').replaceChildren();$('file-title').textContent='選擇規格書後，在這裡核對匯出結果。';$('export-all').disabled=true;$('export-filtered').disabled=true;$('detail').close();}
-function stop(){generation++;activeWorker?.terminate();activeWorker=null;busy(false);}
+function clearResult(){result=null;page=0;render();for(const id of ['row-count','product-count','change-count','review-count'])$(id).textContent='—';$('review-list').replaceChildren();$('source-list').replaceChildren();$('file-title').textContent='選擇規格書後，在這裡核對匯出結果。';$('export-all').disabled=true;$('export-filtered').disabled=true;$('detail').close();textStop();textClear();setTextTab(false);}
+function stop(){generation++;activeWorker?.terminate();activeWorker=null;textStop();busy(false);}
 $('cancel').onclick=()=>{stop();clearResult();$('progress').textContent='已取消解析。';};
-$('clear-session').onclick=()=>{stop();clearResult();textStop();textClear();$('upload-form').reset();$('old-area').hidden=true;$('old-file').required=false;fileName();clearError();$('progress').textContent='已清除檔案與結果。PDF 不會上傳到伺服器。';};
+$('clear-session').onclick=()=>{stop();clearResult();$('upload-form').reset();$('old-area').hidden=true;$('old-file').required=false;fileName();clearError();$('progress').textContent='已清除檔案與結果。PDF 不會上傳到伺服器。';};
 $('upload-form').addEventListener('submit',async e=>{
  e.preventDefault();stop();const run=generation;let phase='讀取檔案';clearResult();clearError();busy(true);
  try{
@@ -39,7 +39,13 @@ $('upload-form').addEventListener('submit',async e=>{
   $('review-count').textContent=json.review.length;$('product').replaceChildren(el('option','全部產品'));$('product').firstChild.value='';
   json.products.forEach(p=>{const o=el('option',p);o.value=p;$('product').append(o);});
   $('search').value='';$('kind').value='';$('status').value='';render();rawViews();
-  $('progress').textContent=`解析完成。${json.rows.length.toLocaleString()} 列，${json.review.length} 張原表待核對。`;
+  const specDone=`解析完成。${json.rows.length.toLocaleString()} 列，${json.review.length} 張原表待核對。`;
+  // Two versions: the narrative comparison runs in the same analysis; a single version skips it.
+  if(json.compared){
+   phase='比對文字敘述';setTextTab(true);$('progress').textContent='規格解析完成，正在比對文字敘述…';
+   try{await runText(file,old);if(run!==generation)return;$('progress').textContent=specDone+'文字敘述比對完成。';}
+   catch(err){if(run!==generation)return;$('progress').textContent=specDone+(err.cancelled?'文字敘述比對已中止。':'文字敘述比對未完成，詳見「文字敘述差異」分頁。');}
+  }else $('progress').textContent=specDone;
   $('export-all').disabled=false;$('export-filtered').disabled=false;
  }catch(err){if(run!==generation)return;showError(err,phase);$('progress').textContent='本次解析未完成，請確認檔案或頁碼後重試。';clearResult();}
  finally{if(run===generation){activeWorker?.terminate();activeWorker=null;busy(false);}}
@@ -58,34 +64,33 @@ $('prev').onclick=()=>{page--;render();};$('next').onclick=()=>{page++;render();
 function detail(r){const dl=el('dl');compareRow(r).forEach((value,i)=>{dl.append(el('dt',COMPARE_HEADERS[i]),el('dd',value!==''&&value!==undefined&&value!==null?value:'未提供'));});dl.append(el('dt','PDF 實際頁次'),el('dd',r._pdf_page||'—'),el('dt','章節'),el('dd',r._section||'—'));const wrap=$('detail-content');wrap.replaceChildren(dl);if(r._status==='review')wrap.append(el('p','相同產品／規格／條件出現多筆資料，未自動判定配對，請核對原文。'));if(r._candidates?.length){wrap.append(el('h3','舊版候選規格（未自動配對）'));for(const p of r._candidates)wrap.append(el('pre',result.columns.map(c=>`${c}: ${p[c]??''}`).join('\n')+`\nPDF 實際頁次: ${p._pdf_page||'—'}`));}if(r._changes&&Object.keys(r._changes).length){wrap.append(el('h3','版本差異'));for(const [k,v] of Object.entries(r._changes))wrap.append(el('p',`${k}：${v.old===''?'空白':v.old} → ${v.new===''?'空白':v.new}`));}if(r._notes){wrap.append(el('h3','原文註解'),el('pre',r._notes));}$('detail').showModal();}
 $('close-detail').onclick=()=>$('detail').close();
 function rawViews(){const rev=$('review-list');rev.replaceChildren();if(!result.review.length)rev.append(el('p','沒有待核對的未轉換表格。'));result.review.forEach(r=>{const d=el('details');d.append(el('summary',`第 ${r.page} 頁 · ${r.section}`),el('p',r.reason));const wrap=el('div',undefined,'raw-table');const t=el('table');r.raw.forEach(row=>{const tr=el('tr');row.forEach(c=>tr.append(el('td',c||'')));t.append(tr);});wrap.append(t);d.append(wrap);rev.append(d);});const src=$('source-list');src.replaceChildren();result.sources.forEach(s=>{const d=el('details');d.append(el('summary',`文件第 ${s.page} 頁 ／ PDF 第 ${s.pdf_page} 頁　${s.section}`),el('pre',s.text));src.append(d);});}
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));$(x.dataset.tab+'-panel').hidden=x!==b;});});
-async function download(filteredOnly){if(!result)return;const snapshot={...result,rows:filteredOnly?filtered():result.rows};try{$('export-all').disabled=true;$('export-filtered').disabled=true;const {makeWorkbook}=await import('./workbook.mjs');const bytes=await makeWorkbook(snapshot);const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=el('a');a.href=url;a.download=filteredOnly?'datasheet_specs_filtered.xlsx':'datasheet_specs.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){showError(e,'匯出 Excel');}finally{$('export-all').disabled=!result;$('export-filtered').disabled=!result;}}
+function selectTab(b){document.querySelectorAll('[data-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));$(x.dataset.tab+'-panel').hidden=x!==b;});}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>selectTab(b));
+// The narrative tab only exists when two versions are analysed together.
+function setTextTab(visible){const b=document.querySelector('[data-tab="text"]');b.hidden=!visible;if(!visible&&b.classList.contains('active'))selectTab(document.querySelector('[data-tab="specs"]'));}
+async function download(filteredOnly){if(!result)return;const snapshot={...result,rows:filteredOnly?filtered():result.rows};try{$('export-all').disabled=true;$('export-filtered').disabled=true;const {makeWorkbook}=await import('./workbook.mjs');const text=textState?{newDoc:textState.newDoc,oldDoc:textState.oldDoc,report:textState.report}:null;const bytes=await makeWorkbook(snapshot,text);const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=el('a');a.href=url;a.download=filteredOnly?'datasheet_specs_filtered.xlsx':'datasheet_specs.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){showError(e,'匯出 Excel');}finally{$('export-all').disabled=!result;$('export-filtered').disabled=!result;}}
 $('export-all').onclick=()=>download(false);$('export-filtered').onclick=()=>download(true);
 // ---- 文字敘述差異 ----
-let textState=null,textWorker=null,textGen=0,textLib=null,textSelected=null;
-const textBusy=v=>{$('text-run').disabled=v;$('text-run').textContent=v?'正在比對…':'比對文字敘述';$('text-cancel').hidden=!v;};
-function textStop(){textGen++;textWorker?.terminate();textWorker=null;textBusy(false);}
-function textClear(){textState=null;textSelected=null;$('text-export').disabled=true;$('text-export-md').disabled=true;$('text-summary').hidden=true;$('text-error').hidden=true;$('text-progress').textContent='';$('text-sections').replaceChildren(el('p','尚未比對。','text-empty'));$('text-detail').replaceChildren(el('p','選擇左側章節查看舊版／新版並排差異。','text-empty'));}
-function textInvalidate(){if(!textState&&!textWorker)return;textStop();textClear();$('text-progress').textContent='檔案已變更，請重新比對文字敘述。';}
+let textState=null,textWorker=null,textGen=0,textLib=null,textSelected=null,textCancel=null;
+const cancelled=()=>Object.assign(Error('文字敘述比對已中止。'),{cancelled:true});
+function textStop(){textGen++;textWorker?.terminate();textWorker=null;textCancel?.();textCancel=null;}
+function textClear(){textState=null;textSelected=null;$('text-summary').hidden=true;$('text-error').hidden=true;$('text-progress').textContent='';$('text-sections').replaceChildren(el('p','尚未比對。','text-empty'));$('text-detail').replaceChildren(el('p','選擇左側章節查看舊版／新版並排差異。','text-empty'));}
+function textInvalidate(){if(!textState&&!textWorker)return;textStop();textClear();$('text-progress').textContent='檔案已變更，請重新按「解析並預覽」。';}
 $('old-file').addEventListener('change',textInvalidate);$('compare').addEventListener('change',textInvalidate);
-$('text-cancel').onclick=()=>{textStop();textClear();$('text-progress').textContent='已取消文字比對。';};
-$('text-run').onclick=async()=>{
- textStop();textClear();const run=textGen;textBusy(true);
+// Runs after the spec analysis of the same two PDFs; rejects with {cancelled:true} when stopped.
+async function runText(file,old){
+ textStop();textClear();const run=textGen;
  try{
-  const file=$('new-file').files[0],old=$('compare').checked?$('old-file').files[0]:null;
-  if(!file||!old)throw Error('請先選擇新版 PDF，勾選「比對新舊版本」並選擇舊版 PDF。');
-  if(file.size+old.size>50*1024*1024)throw Error('PDF 合計上限為 50 MB。');
   $('text-progress').textContent='正在讀取本機檔案…';
-  const [newData,oldData]=await Promise.all([file.arrayBuffer(),old.arrayBuffer()]);textLib??=await import('./text-diff.mjs');if(run!==textGen)return;
+  const [newData,oldData]=await Promise.all([file.arrayBuffer(),old.arrayBuffer()]);textLib??=await import('./text-diff.mjs');if(run!==textGen)throw cancelled();
   const worker=new Worker(new URL('./text-diff.worker.mjs',import.meta.url),{type:'module'});textWorker=worker;
-  const json=await new Promise((resolve,reject)=>{worker.onmessage=({data})=>{if(data.type==='progress')$('text-progress').textContent=`${data.label}：讀取頁面 ${data.current} / ${data.total}`;else if(data.type==='result')resolve(data.result);else if(data.type==='error'){const e=Error(data.message);e.diagnostic=data;reject(e);}};worker.onerror=e=>reject(Error(e.message||'文字比對程序無法啟動，請更新瀏覽器或重新載入頁面。'));worker.postMessage({newData,oldData,filename:file.name,oldFilename:old.name},[newData,oldData]);});
-  if(run!==textGen)return;
+  const json=await new Promise((resolve,reject)=>{textCancel=()=>reject(cancelled());worker.onmessage=({data})=>{if(data.type==='progress'){const msg=`${data.label}：讀取頁面 ${data.current} / ${data.total}`;$('text-progress').textContent=msg;$('progress').textContent='文字敘述比對 · '+msg;}else if(data.type==='result')resolve(data.result);else if(data.type==='error'){const e=Error(data.message);e.diagnostic=data;reject(e);}};worker.onerror=e=>reject(Error(e.message||'文字比對程序無法啟動，請更新瀏覽器或重新載入頁面。'));worker.postMessage({newData,oldData,filename:file.name,oldFilename:old.name},[newData,oldData]);});
+  if(run!==textGen)throw cancelled();
   textState={...json,manual:new Set()};textRebuild();
   $('text-progress').textContent=`比對完成：新版 ${json.newDoc.sections.length} 個章節（PDF ${json.newDoc.pages} 頁），舊版 ${json.oldDoc.sections.length} 個章節（PDF ${json.oldDoc.pages} 頁）。`;
-  $('text-export').disabled=false;$('text-export-md').disabled=false;
- }catch(err){if(run!==textGen)return;textClear();$('text-error').textContent=err.message||'文字比對失敗。';$('text-error').hidden=false;$('text-progress').textContent='文字比對未完成。';}
- finally{if(run===textGen){textWorker?.terminate();textWorker=null;textBusy(false);}}
-};
+ }catch(err){if(run===textGen&&!err.cancelled){textClear();$('text-error').textContent=err.message||'文字比對失敗。';$('text-error').hidden=false;$('text-progress').textContent='文字比對未完成。';}throw err;}
+ finally{if(run===textGen){textWorker?.terminate();textWorker=null;textCancel=null;}}
+}
 const hidePart=()=>$('text-hide-part').checked;
 // With "僅型號替換視為相同", part-only differences count as same everywhere in the view.
 const shownStatus=s=>s==='part'&&hidePart()?'same':s;
@@ -143,16 +148,3 @@ function textDetail(){
 }
 for(const id of ['text-status','text-hide-part','text-only-diff'])$(id).addEventListener('change',textRender);
 $('text-search').addEventListener('input',textRender);
-$('text-export').onclick=async()=>{if(!textState)return;$('text-export').disabled=true;try{const {makeTextDiffWorkbook}=await import('./text-diff-workbook.mjs');const bytes=await makeTextDiffWorkbook({newDoc:textState.newDoc,oldDoc:textState.oldDoc,report:textState.report,filename:textState.filename,oldFilename:textState.oldFilename});const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=el('a');a.href=url;a.download='datasheet_text_diff.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(err){$('text-error').textContent='匯出 Excel 失敗：'+(err.message||err);$('text-error').hidden=false;}finally{$('text-export').disabled=!textState;}};
-
-// Developer audit: export preprocessed Markdown without uploading PDF contents.
-$('text-export-md').onclick=async()=>{
- if(!textState)return;
- try{
-  const {toComparisonMarkdown}=await import('./narrative-structure.mjs');
-  const markdown=toComparisonMarkdown(textState.newDoc,textState.oldDoc,{filename:textState.filename,oldFilename:textState.oldFilename});
-  const url=URL.createObjectURL(new Blob([markdown],{type:'text/markdown;charset=utf-8'}));
-  const link=el('a');link.href=url;link.download='datasheet_narrative_preprocessed.md';link.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
- }catch(err){$('text-error').textContent='匯出 Markdown 失敗：'+(err.message||err);$('text-error').hidden=false;}
-};

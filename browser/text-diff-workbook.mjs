@@ -25,9 +25,8 @@ function style(s,headers,wide){
 }
 const fill=(row,status)=>{if(FILLS[status])row.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:FILLS[status]}};};
 const sourcePage=p=>p&&p.endPage>p.page?pageSpan(p):p?.page??null;
-// data: {newDoc, oldDoc, report, filename, oldFilename}
-export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',oldFilename=''}){
- const book=new ExcelJS.Workbook();book.creator='Datasheet 規格工作台';
+// Adds the narrative diff sheets to an existing workbook; data: {newDoc, oldDoc, report}.
+export function addTextDiffSheets(book,{newDoc,oldDoc,report}){
  const diff=book.addWorksheet(TEXT_DIFF_SHEET);diff.addRow(TEXT_DIFF_HEADERS);
  const sections=book.addWorksheet(TEXT_SECTION_SHEET);sections.addRow(TEXT_SECTION_HEADERS);
  for(const e of report){
@@ -41,8 +40,17 @@ export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',old
  }
  style(diff,TEXT_DIFF_HEADERS,{'新版章節':30,'舊版章節':30,'差異標示（紅刪除線＝舊版／綠底線＝新版）':70,'舊版原文':55,'新版原文':55});
  style(sections,TEXT_SECTION_HEADERS,{'新版章節':55,'舊版章節':55});
+}
+// data: {newDoc, oldDoc, report, filename, oldFilename}
+export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',oldFilename=''}){
+ const book=new ExcelJS.Workbook();book.creator='Datasheet 規格工作台';
+ addTextDiffSheets(book,{newDoc,oldDoc,report});
  const info=book.addWorksheet('說明');info.columns=[{header:'項目',width:22},{header:'說明',width:90}];
- [['新版檔案',filename],['舊版檔案',oldFilename],
+ [['新版檔案',filename],['舊版檔案',oldFilename],...TEXT_DIFF_NOTES].forEach(r=>info.addRow(r));
+ info.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};info.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF17483F'}};info.getColumn(2).alignment={wrapText:true,vertical:'top'};
+ return book.xlsx.writeBuffer();
+}
+export const TEXT_DIFF_NOTES=[
   ['比對範圍','只比對文字敘述：段落、條列、Notes、Figure/Table 標題。已排除有框線的表格（AC/DC、指令表等）、圖中小字標籤、頁首頁尾、目錄頁及 Revision History。'],
   ['章節配對','以去除編號後的章節標題配對，型號字樣視為相同；無同名標題時再以標題相似度與章節編號輔助。網頁上可手動修正配對，匯出內容以網頁目前的配對為準。'],
   ['相同','忽略空白、斷字空白與引號樣式後完全一致。'],
@@ -50,7 +58,4 @@ export async function makeTextDiffWorkbook({newDoc,oldDoc,report,filename='',old
   ['修改','同一段落有字詞增刪；「差異標示」欄的紅色刪除線為舊版文字，綠色底線為新版文字，藍色為型號替換。'],
   ['新增 / 移除','只出現在新版或舊版的段落或章節。'],
   ['頁次','「PDF 頁」為 PDF 檔案的實際頁次，可能與頁尾印刷頁碼不同。跨頁段落顯示起訖頁，例如 14–15。'],
-  ['限制','比對前會將跨頁與不同排版的文字整理成句子，但 PDF 原始閱讀順序、圖文混排仍可能造成誤判，請核對原始 PDF。原始章節預處理結果可匯出 Markdown；單一儲存格超過 32,000 字元時會截斷。']].forEach(r=>info.addRow(r));
- info.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};info.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF17483F'}};info.getColumn(2).alignment={wrapText:true,vertical:'top'};
- return book.xlsx.writeBuffer();
-}
+  ['限制','比對前會將跨頁與不同排版的文字整理成句子，但 PDF 原始閱讀順序、圖文混排仍可能造成誤判，請核對原始 PDF；單一儲存格超過 32,000 字元時會截斷。']];

@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import {normalizeOpcode,stripDummyNotes} from './spec-core.mjs';
 import {COMPARE_HEADERS,STATUS_LABELS,compareRow} from './comparison-display.mjs';
 export {COMPARE_HEADERS,STATUS_LABELS} from './comparison-display.mjs';
+import {addTextDiffSheets,TEXT_DIFF_NOTES,TEXT_DIFF_SHEET,TEXT_SECTION_SHEET} from './text-diff-workbook.mjs';
 export const COMPARE_SHEET='產品規格比較表';
 export const COMMAND_SHEET='指令表';
 export const COMMAND_HEADERS=['比較結果','變更說明（舊 → 新）','介面模式','指令名稱','Opcode','設定','Address','Dummy','Data','其他欄位','分組','章節','新版頁碼','舊版頁碼'];
@@ -14,7 +15,8 @@ function commandRow(c,compared){
 const FILLS={added:'FFE2F1E7',changed:'FFFFE9BE',review:'FFFFDDDA',removed:'FFE7E9EC'};
 const shown=v=>v===''||v===undefined||v===null?'空白':String(v);
 const pagesText=ps=>ps?.length?`PDF 第 ${ps.join(', ')} 頁`:'未偵測到指令表';
-export async function makeWorkbook(result){
+// text (optional): {newDoc, oldDoc, report} from the narrative comparison; adds its sheets.
+export async function makeWorkbook(result,text=null){
  const book=new ExcelJS.Workbook();book.creator='Datasheet 規格工作台';
  function sheet(name,headers,data){const s=book.addWorksheet(name);s.addRow(headers);for(const row of data)s.addRow(row.map(v=>v===''||v===undefined?null:v));s.views=[{state:'frozen',ySplit:1}];s.autoFilter={from:{row:1,column:1},to:{row:Math.max(1,s.rowCount),column:headers.length}};s.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};s.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF17483F'}};s.columns.forEach((c,i)=>{c.width=['parameter','condition','description','text','raw','變更說明（舊 → 新）','相關指令','指令名稱','其他欄位','章節'].includes(headers[i])?55:18;c.alignment={vertical:'top',wrapText:true};});return s;}
  const rows=result.rows||[];const s=sheet(COMPARE_SHEET,COMPARE_HEADERS,rows.map(compareRow));
@@ -40,7 +42,8 @@ export async function makeWorkbook(result){
   [COMPARE_SHEET,'新版規格、完整 User mode Command 與新舊版比較結果，可用第一列篩選「比較結果」或「spec type」。'],
   [COMMAND_SHEET,'由 PDF 指令表（依表頭 Command／Opcode／Address／Dummy／Data 或 Data Input Output／Byte 1… 自動偵測，不依固定頁碼）擷取；有舊版時以 介面模式＋指令名稱＋Opcode＋設定 配對比較。'],
   ['Review','無法可靠轉成固定欄位的原始表格，需人工核對。舊版內容的 section 以「舊版 /」開頭。'],
-  ['Source','新舊版來源頁擷取文字與原始 Notes（舊版 section 以「舊版 /」開頭）。page 為印刷頁碼，pdf_page 為 PDF 實際頁次。']
+  ['Source','新舊版來源頁擷取文字與原始 Notes（舊版 section 以「舊版 /」開頭）。page 為印刷頁碼，pdf_page 為 PDF 實際頁次。'],
+  ...(text?[[TEXT_DIFF_SHEET,'新舊版文字敘述逐句比對，紅色刪除線＝舊版、綠色底線＝新版、藍色＝型號替換。'],[TEXT_SECTION_SHEET,'各章節的配對與相同／修改／新增／移除段落數。'],['',''],['【文字敘述差異】',''],...TEXT_DIFF_NOTES]:[])
  ].forEach(row=>info.addRow(row));
  info.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};info.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF17483F'}};
  info.eachRow(row=>{row.alignment={vertical:'top',wrapText:true};if(String(row.getCell(1).value||'').startsWith('【'))row.font={bold:true};});
@@ -49,5 +52,6 @@ export async function makeWorkbook(result){
  if(result.compared)commands.forEach((c,i)=>{const color=FILLS[c._status];if(color)cs.getRow(i+2).fill={type:'pattern',pattern:'solid',fgColor:{argb:color}};});
  sheet('Review',['page','pdf_page','table','section','reason','raw'],(result.review||[]).map(r=>[r.page,r.pdf_page,r.table,r.section,r.reason,r.raw.map(row=>row.join(' | ')).join('\n')]));
  sheet('Source',['page','pdf_page','section','text'],(result.sources||[]).map(r=>[r.page,r.pdf_page,r.section,r.text]));
+ if(text)addTextDiffSheets(book,text);
  return book.xlsx.writeBuffer();
 }

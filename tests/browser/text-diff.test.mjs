@@ -5,6 +5,7 @@ import ExcelJS from 'exceljs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {buildSections,compareSection,diffWords,pairSections,buildReport,summarize,extractNarrative,tocEntries,segmentsOf} from '../../browser/text-diff.mjs';
 import {makeTextDiffWorkbook,TEXT_DIFF_SHEET,TEXT_SECTION_SHEET,TEXT_DIFF_HEADERS} from '../../browser/text-diff-workbook.mjs';
+import {makeWorkbook,COMPARE_SHEET,COMMAND_SHEET} from '../../browser/workbook.mjs';
 
 const sec=(number,title,...texts)=>({number,title,level:number.split('.').length,page:1,printed:1,paragraphs:texts.map(text=>({text,page:1,printed:1,kind:'text'}))});
 const seg=(text,x0,x1,y,h=9.5)=>({text,x0,x1,y,h});
@@ -105,6 +106,19 @@ test('text diff workbook: paragraph rows, rich-text markup, section overview and
  assert.ok(runs.some(r=>r.font?.strike&&r.text.includes('section')));assert.ok(runs.some(r=>r.font?.underline&&r.text.includes('Figure')));
  assert.equal(s.getCell('A3').value,'相同');assert.equal(s.getCell('H3').value,'=1+1');assert.equal(s.getCell('H3').formula,undefined);
  assert.equal(w.getWorksheet(TEXT_SECTION_SHEET).getCell('H2').value,1);
+});
+
+test('spec workbook appends narrative diff sheets only when a text comparison is supplied',async()=>{
+ const oldDoc={sections:[sec('3.3','Write Protect (/WP)','See section 2 for details.')]},newDoc={sections:[sec('3.3','Write Protect (/WP)','See Figure 2.x for details.')]};
+ const report=buildReport(oldDoc,newDoc,pairSections(oldDoc.sections,newDoc.sections));
+ const spec={rows:[],review:[],sources:[],compared:true,filename:'new.pdf',old_filename:'old.pdf'};
+ const w=new ExcelJS.Workbook();await w.xlsx.load(await makeWorkbook(spec,{oldDoc,newDoc,report}));
+ assert.deepEqual(w.worksheets.map(s=>s.name),[COMPARE_SHEET,'說明',COMMAND_SHEET,'Review','Source',TEXT_DIFF_SHEET,TEXT_SECTION_SHEET]);
+ assert.equal(w.getWorksheet(TEXT_DIFF_SHEET).getCell('A2').value,'修改');
+ const notes=[];w.getWorksheet('說明').eachRow(r=>notes.push(String(r.getCell(1).value)));
+ assert.ok(notes.includes(TEXT_DIFF_SHEET)&&notes.includes(TEXT_SECTION_SHEET));
+ const plain=new ExcelJS.Workbook();await plain.xlsx.load(await makeWorkbook(spec));
+ assert.equal(plain.getWorksheet(TEXT_DIFF_SHEET),undefined);
 });
 
 const newPdf=process.env.SPEC_TEXT_NEW_PDF,oldPdf=process.env.SPEC_TEXT_OLD_PDF;
