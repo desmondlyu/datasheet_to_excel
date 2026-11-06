@@ -3,7 +3,7 @@
 ## AI 快速喚醒區
 
 - **專案**：純瀏覽器的「Datasheet 規格工作台」（Vite 8 + pdfjs-dist legacy + ExcelJS），部署於 GitHub Pages；repo `desmondlyu/datasheet_to_excel`，主線為 `master`（沒有 `main`）。
-- **分頁**：規格解析／比較預覽／來源文字／**文字敘述差異**（2026-11-04 新增）。
+- **分頁**：規格解析／比較預覽／來源文字／**文字敘述差異**（2026-11-04 新增；2026-11-06 起只在雙版比對時顯示，由「解析並預覽」自動產生）。
 - **指令**：`npm test`（`node --test tests/browser/*.test.mjs`）、`npm run build`、`npm run dev`（127.0.0.1:5173）、`npm run preview`。
 - **私有 PDF**：放在 repo 根目錄，已被 `.gitignore` 排除，不可提交。整合測試使用以下環境變數：
   - `SPEC_REFERENCE_PDF`
@@ -63,7 +63,21 @@
 - 驗證：`npm test` 含 4 個私有 PDF，共 109 項，102 通過、0 失敗、7 略過；`npm run build` 成功。
 - 已知限制：舊版 PDF 的萃取瑕疵（例如 `8-p 0.13"ad`）會被算成修改。
 
+## 解析與文字比對整合（2026-11-06）
+
+- 需求：「比對文字敘述」併入「解析並預覽」；文字敘述差異分頁移除工具列按鈕（比對／取消／下載文字差異 Excel／下載預處理 Markdown），只顯示結果；只上傳一版時不做文字比對。
+- `index.html`：`[data-tab=text]` 預設 `hidden`；移除 `.text-toolbar`（`text-run`／`text-cancel`／`text-export`／`text-export-md`）；`#text-panel` 末尾加 `.hint` 說明。
+- `browser/main.mjs`：
+  - submit：規格結果渲染後，若 `json.compared` → `setTextTab(true)` + `await runText(file,old)`（依序執行，記憶體較安全；規格預覽先出現）。文字比對失敗不影響規格結果；匯出按鈕等文字比對結束才啟用。
+  - `runText` 重新讀取兩個檔案（規格 worker 已 transfer buffer）並跑 `text-diff.worker.mjs`；`textCancel` reject hook 回傳 `{cancelled:true}`；進度同步到 `#progress`（前綴「文字敘述比對 · 」）。
+  - `clearResult()`／`stop()` 會呼叫 `textStop()`、`textClear()`、`setTextTab(false)`；`selectTab`／`setTextTab` 隱藏作用中分頁時切回 specs。
+  - `download()` 把 `textState` 的 `{newDoc,oldDoc,report}` 傳給 `makeWorkbook`（手動章節配對後的 report 也會反映）。
+- `browser/workbook.mjs`：`makeWorkbook(result,text=null)`；有 `text` 時說明頁加入文字差異說明（`TEXT_DIFF_NOTES`），並在 Source 後加 文字差異／章節總覽（`addTextDiffSheets`）。「下載全部」與「下載篩選結果」都包含。
+- `browser/text-diff-workbook.mjs`：抽出 `addTextDiffSheets`、`TEXT_DIFF_NOTES`；`makeTextDiffWorkbook` 保留給測試。`narrative-structure.mjs` 的 `toComparisonMarkdown` 仍匯出但 UI 不再使用。
+- `BUILD_ID` = `2026-11-06.1`。
+- 驗證：`npm test` 110 項，101 通過、0 失敗、9 略過；`npm run build` 成功；Playwright E2E（vite preview）單版 AG Rev0.5 → 文字分頁隱藏；AG Rev0.5 vs 0.4 → 修改 17／新增 1／移除 0，下載 Excel 含 7 張表（產品規格比較表、說明、指令表、Review、Source、文字差異 1898 列、章節總覽 231 列），無 page error。
+
 ## 跨 Session reference（最多 3 筆）
 
 1. 2026-11-04 Copilot CLI session `ed086d40-3972-47b7-bdaf-c8445673f34c`：文字敘述差異分頁實作、計畫文件與本機合併。
-2. 2026-11-05 Copilot CLI session `5adf4d1b-c445-433b-a7c7-6cf511e37ff8`：版面誤報修正、拉取雲端重排、REA 分析與雜訊優化。
+2. 2026-11-05 Copilot CLI session `5adf4d1b-c445-433b-a7c7-6cf511e37ff8`：版面誤報修正、拉取雲端重排、REA 分析與雜訊優化、Portal 卡片、解析與文字比對整合（2026-11-06）。
