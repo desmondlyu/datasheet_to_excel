@@ -44,3 +44,11 @@ test('byte-layout repeated subgroup headers reset byte columns without becoming 
  const r=parseCommandTable(table,items,meta);
  assert.deepEqual(r.unparsed,[]);assert.equal(r.rows.length,1);assert.equal(r.rows[0].mode,'1-1-1');assert.equal(r.rows[0].group,'Page Buffer');
 });
+test('byte-layout header naming the I/O protocol sets the group mode',()=>{
+ const {table,items}=grid([['Data Input Output I/O PROTOCOL (1 – 1 – 1)','Byte 1','Byte 2','Byte 3','Byte 4'],['Number of Clock(1-1-2)','8','8','8','8'],['Write Enable','06h','','',''],
+ ['Data Input Output I/O PROTOCOL (1 – 1 – 2)','Byte 1','Byte 2','Byte 3','Byte 4'],['Number of Clock(1-1-2)','8','8','8','8'],['Fast Read Dual Output','3Bh','A23-A16','A15-A8','A7-A0']]);
+ assert.equal(isCommandTable(table,items),true);
+ const r=parseCommandTable(table,items,meta);
+ assert.deepEqual(r.unparsed,[]);
+ assert.deepEqual(r.rows.map(c=>[c.command,c.opcode,c.mode]),[['Write Enable','06h','1-1-1'],['Fast Read Dual Output','3Bh','1-1-2']]);
+});

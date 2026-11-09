@@ -2,7 +2,9 @@
 import {clean,normalizeOpcode,stripDummyNotes} from './spec-core.mjs';
 import {textIn} from './geometry.mjs';
 
-const isLabel=s=>/^Data\s+Input\s*\/?\s*Output$/i.test(s);
+// The corner header may also state the table's I/O protocol, e.g. "Data Input Output I/O PROTOCOL (1 – 1 – 1)".
+const protocolOf=s=>s.match(/I\/O\s+PROTOCOL\s*\(\s*([1-9]d?)\s*[-–]\s*([1-9]d?)\s*[-–]\s*([1-9]d?)\s*\)\s*$/i)?.slice(1).join('-')||'';
+const isLabel=s=>/^Data\s+Input\s*\/?\s*Output(?:\s+I\/O\s+PROTOCOL\s*\([^)]*\))?$/i.test(s);
 const byteLabel=/^Byte\s+\d+(?:\s*[~–-]\s*(?:Byte\s*)?\d+)?$/i;
 const sorted=cells=>[...cells].sort((a,b)=>a[1]-b[1]||a[0]-b[0]);
 export function isByteCommandTable(table,items){
@@ -14,17 +16,18 @@ export function parseByteCommandTable(table,items,meta){
  const cells=sorted(table.cells),cache=new Map();
  const text=c=>{if(!cache.has(c))cache.set(c,clean(textIn(items,c)));return cache.get(c);};
  const anchors=cells.filter(c=>Math.abs(c[0]-table.bbox[0])<1);
- const rows=[],unparsed=[];let columns=[],clocks=[],mode='',group='';
+ const rows=[],unparsed=[];let columns=[],clocks=[],mode='',group='',protocol='';
  for(const anchor of anchors){
   const cy=(anchor[1]+anchor[3])/2;
   const band=cells.filter(c=>c[1]<=cy&&cy<c[3]),name=text(anchor);
   if(band.some(c=>/^Byte\s+1$/i.test(text(c)))&&band.filter(c=>byteLabel.test(text(c))).length>=2){
    columns=band.filter(c=>byteLabel.test(text(c))).map(c=>({label:text(c),x0:c[0],x1:c[2]}));
-   if(isLabel(name)){clocks=[];mode='';group='';}else group=name;
+   if(isLabel(name)){clocks=[];group='';protocol=protocolOf(name);mode=protocol;}else group=name;
    continue;
   }
   if(/^Number of Clock/i.test(name)){
-   mode=name.match(/\b([1-9]d?(?:-[1-9]d?){2})\b/i)?.[1]||'';
+   // An explicit I/O PROTOCOL in the header outranks the clock-row label.
+   mode=protocol||name.match(/\b([1-9]d?(?:-[1-9]d?){2})\b/i)?.[1]||'';
    clocks=band.filter(c=>c!==anchor).map(c=>({x0:c[0],x1:c[2],value:text(c)}));continue;
   }
   if(!name)continue;
