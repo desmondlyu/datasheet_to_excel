@@ -1,6 +1,8 @@
 // Geometric reconstruction from the pinned PDF.js DrawOPS representation.
 // Never forward-fill numeric cells: inherit only a cell whose physical box spans the row.
 import {clean} from './spec-core.mjs';
+// A filled ruling is thinner than 2 page points; measured after the CTM so scaled content streams behave alike.
+const THIN=2;
 const point=(m,x,y)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];
 const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
 export function textItems(content,viewport){return content.items.filter(i=>clean(i.str)).map(i=>{const [x,y]=point(viewport.transform,i.transform[4],i.transform[5]);return {text:i.str,x,y:y-i.height*.35,width:i.width,height:i.height};});}
@@ -18,14 +20,43 @@ export function rulingLines(ops,OPS,viewport){
   if(f!==OPS.constructPath)continue;
   const [paint,paths,bbox]=args;if(paint===OPS.endPath)continue;
   if([OPS.fill,OPS.eoFill].includes(paint)){
-   if(!bbox)continue;const [x0,y0,x1,y1]=bbox;
-   if(x1-x0<2&&y1-y0>2)segment([(x0+x1)/2,y0],[(x0+x1)/2,y1]);
-   else if(y1-y0<2&&x1-x0>2)segment([x0,(y0+y1)/2],[x1,(y0+y1)/2]);
+   if(!bbox)continue;
+   const page=([x0,y0,x1,y1])=>{const a=point(viewport.transform,...point(matrix,x0,y0)),b=point(viewport.transform,...point(matrix,x1,y1));return [Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])];};
+   const thin=box=>{const [x0,y0,x1,y1]=page(box);if(x1-x0<THIN&&y1-y0>THIN)edges.push({axis:'v',pos:(x0+x1)/2,start:y0,end:y1});else if(y1-y0<THIN&&x1-x0>THIN)edges.push({axis:'h',pos:(y0+y1)/2,start:x0,end:x1});};
+   const [x0,y0,x1,y1]=page(bbox);
+   if(x1-x0<THIN||y1-y0<THIN){thin(bbox);continue;}
+   // Some generators paint a whole row of borders as one fill holding many thin rectangles.
+   for(const box of axisRectangles(paths))thin(box);
    continue;
   }
   for(const path of paths){if(!ArrayBuffer.isView(path)&&!Array.isArray(path))continue;let at=0,prev=null,start=null;while(at<path.length){const cmd=path[at++];if(cmd===0){prev=start=[path[at++],path[at++]];}else if(cmd===1){const next=[path[at++],path[at++]];if(prev)segment(prev,next);prev=next;}else if(cmd===2){at+=4;prev=[path[at++],path[at++]];}else if(cmd===3){at+=2;prev=[path[at++],path[at++]];}else if(cmd===4){if(prev&&start)segment(prev,start);prev=start;}else break;}}
  }
  return mergeEdges(edges);
+}
+// Axis-aligned straight-sided subpaths only; curves (logos, glyph art) never become rulings.
+export function axisRectangles(paths){
+ const boxes=[];
+ for(const path of paths||[]){
+  if(!ArrayBuffer.isView(path)&&!Array.isArray(path))continue;
+  let pts=null,ok=true,at=0;
+  const flush=()=>{
+   if(pts&&ok&&pts.length>=4&&pts.length<=5&&pts.every((p,i)=>{const q=pts[(i+1)%pts.length];return Math.abs(p[0]-q[0])<.01||Math.abs(p[1]-q[1])<.01;})){
+    const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);boxes.push([Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]);
+   }
+   pts=null;ok=true;
+  };
+  while(at<path.length){
+   const cmd=path[at++];
+   if(cmd===0){flush();pts=[[path[at++],path[at++]]];}
+   else if(cmd===1){const p=[path[at++],path[at++]];if(pts){const l=pts[pts.length-1];if(Math.abs(l[0]-p[0])>=.01||Math.abs(l[1]-p[1])>=.01)pts.push(p);}}
+   else if(cmd===2){at+=6;ok=false;}
+   else if(cmd===3){at+=4;ok=false;}
+   else if(cmd===4){if(pts&&pts.length>1){const f=pts[0],l=pts[pts.length-1];if(Math.abs(f[0]-l[0])<.01&&Math.abs(f[1]-l[1])<.01)pts.pop();}flush();}
+   else break;
+  }
+  flush();
+ }
+ return boxes;
 }
 export function mergeEdges(edges){
  const output=[];

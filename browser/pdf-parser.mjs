@@ -35,19 +35,27 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
    pageInfo.push({n,page,viewport,items,lines,text,label,inChapter,printed:footer?Number(footer.text.match(/^-\s*(\d+)/)[1]):n});
   }
   const intro=pageInfo.slice(0,2).map(p=>p.text).join('\n');
-  const headerProducts=productsFromText(pageInfo.slice(0,2).flatMap(p=>p.lines.filter(l=>l.y<100).map(l=>l.text)).join(' '));
+  // The cover header names the document; later running headers that disagree are flagged, not added as products.
+  const headerProducts=pageInfo.slice(0,2).map(p=>productsFromText(p.lines.filter(l=>l.y<100).map(l=>l.text).join(' '))).find(x=>x.length)||[];
   const defaults=headerProducts.length?headerProducts:productsFromText(intro,['未辨識產品']);
   let selected=pages.length?pageInfo.filter(p=>pages.includes(p.n)):pageInfo.filter(p=>p.inChapter);
   if(!selected.length&&!pages.length){selected=pageInfo.filter(p=>/(DC|AC) Electrical|AC Measurement|Program and Erase Timing/i.test(p.label));}
   if(!selected.length&&!pages.length)selected=pageInfo.filter(p=>/\b(?:PARAMETER|DESCRIPTION)\b/i.test(p.text)&&/\bSYMBOL\b/i.test(p.text)&&/\b(?:MIN|TYP|MAX)\b/i.test(p.text));
   if(!selected.length)throw Error(pageInfo.some(p=>p.text.trim())?'已讀取 PDF 文字，但找不到可辨識的電性規格章節或表格。請指定 PDF 實際頁次。':'PDF 未包含可擷取的文字；若為掃描圖片，請先經過文字辨識。');
-  const rows=[],review=[],sources=[];
+  const rows=[],review=[],sources=[],strangerPages={};
   if(defaults.includes('未辨識產品'))review.push({page:1,pdf_page:1,table:0,section:'產品辨識',reason:'無法可靠辨識產品名稱，請核對原文。',raw:[[intro]]});
   for(let j=0;j<selected.length;j++){
    const p=selected[j];onProgress({stage:'tables',current:j+1,total:selected.length});
    const ops=await p.page.getOperatorList(),tables=groupTables(findCells(rulingLines(ops,pdfjs.OPS,p.viewport)));
    const kind=specKind(p.label);
-   const pageProducts=productsFromText(p.lines.filter(l=>l.y<85).map(l=>l.text).join(' '),defaults);
+   const pageHeader=p.lines.filter(l=>l.y<85).map(l=>l.text).join(' ');
+   let pageProducts=productsFromText(pageHeader,defaults);
+   // A running-header model absent from the document's product list is treated as a header typo, not a new product.
+   const strangers=pageProducts.filter(x=>!defaults.includes(x));
+   if(strangers.length&&!defaults.includes('未辨識產品')){
+    pageProducts=pageProducts.filter(x=>defaults.includes(x));if(!pageProducts.length)pageProducts=defaults;
+    for(const x of strangers)(strangerPages[x]||=[]).push(p);
+   }
    sources.push({page:p.printed,pdf_page:p.n,section:p.label,text:p.text});
    for(let t=0;t<tables.length;t++){
     const table=tables[t],near=p.lines.filter(l=>l.y<table.bbox[1]&&l.y>table.bbox[1]-45).map(l=>l.text).join(' ');
@@ -60,6 +68,7 @@ export async function parsePdf(pdfjs,data,{pages=[],onProgress=()=>{}}={}){
    }
    if(!tables.length&&/\b(PARAMETER|SYMBOL|DESCRIPTION)\b/i.test(p.text))review.push({page:p.printed,pdf_page:p.n,table:0,section:p.label,reason:'找不到可重建的表格線；請核對來源文字。',raw:[[p.text]]});
   }
+  for(const [x,ps] of Object.entries(strangerPages))review.push({page:ps[0].printed,pdf_page:ps[0].n,table:0,section:'產品辨識',reason:`頁首型號 ${x} 不在封面產品清單（${defaults.join(', ')}），已視為文件產品處理；出現頁次：${ps.map(p=>p.printed).join(', ')}，請核對原文。`,raw:[[x]]});
   for(const r of rows){
    if(!r._notes){const s=pageInfo.find(p=>p.n>=r._pdf_page&&p.label===r._section.split(' | ')[0]&&p.text.includes('Notes:'));if(s)r._notes=s.text.split('Notes:').slice(1).join('Notes:');}
    r._notes=(r._notes||'').split(/\n\s*[1-9]\d*\.\d+\s+/)[0].split('Publication Release Date:')[0];
